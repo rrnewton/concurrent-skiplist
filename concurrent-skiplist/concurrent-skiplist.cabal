@@ -22,10 +22,10 @@ library
   other-modules:     Data.Concurrent.Internal.MonadToss
 
   other-extensions:    NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs, ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
-  build-depends:  base >=4.7 && <4.8, 
-                  atomic-primops >=0.6 && <0.7, 
+  build-depends:  base   >=4.6 && <4.8, 
+                  random >=1.0 && <1.1,
                   transformers >=0.3 && <0.4, 
-                  random >=1.0 && <1.1
+                  atomic-primops >=0.6 && <0.7
 --                  lvish >=1.1 && <1.2
   -- hs-source-dirs:      
   default-language:    Haskell2010
