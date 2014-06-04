@@ -1,4 +1,5 @@
-module Control.LVish.MonadToss where
+
+module Data.Concurrent.Internal.MonadToss where
 
 import Control.Monad
 import System.Random (randomIO)

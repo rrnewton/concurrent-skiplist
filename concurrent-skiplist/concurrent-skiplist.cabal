@@ -18,8 +18,8 @@ cabal-version:       >=1.10
 library
   exposed-modules:   Data.Concurrent.LinkedMap, 
                      Data.Concurrent.SkipListMap
-  other-modules:     Control.Reagent,
-                     Control.LVish.MonadToss
+--  other-modules:     Control.Reagent,
+  other-modules:     Data.Concurrent.Internal.MonadToss
 
   other-extensions:    NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs, ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
   build-depends:  base >=4.7 && <4.8, 

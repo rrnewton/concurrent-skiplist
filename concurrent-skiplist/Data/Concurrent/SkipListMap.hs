@@ -40,7 +40,7 @@ import Control.Applicative ((<$>))
 import Control.Monad  
 import Control.Monad.IO.Class
 import Control.Exception (assert)
-import Control.LVish.MonadToss
+import Data.Concurrent.Internal.MonadToss
 -- import Control.LVish (Par)
 -- import Control.LVish.Unsafe () -- FOR MonadIO INSTANCE!  FIXME.  We can't keep this from escaping.
 
