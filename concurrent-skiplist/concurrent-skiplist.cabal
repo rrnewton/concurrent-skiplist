@@ -18,10 +18,17 @@ cabal-version:       >=1.10
 library
   exposed-modules:   Data.Concurrent.LinkedMap, 
                      Data.Concurrent.SkipListMap
---  other-modules:     Control.Reagent,
-  other-modules:     Data.Concurrent.Internal.MonadToss
 
-  other-extensions:    NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs, ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
+                     -- These may later be factored into another package:
+                     Data.Concurrent.Map.Class
+                     Data.Concurrent.Map.Tests
+
+                     Data.Concurrent.Internal.MonadToss
+--  other-modules:     Control.Reagent,
+
+
+  other-extensions:  NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs, 
+                     ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
   build-depends:  base   >=4.6 && <4.8, 
                   random >=1.0 && <1.1,
                   transformers >=0.3 && <0.4, 
