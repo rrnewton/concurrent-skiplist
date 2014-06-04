@@ -29,8 +29,9 @@ library
 
   other-extensions:  NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs, 
                      ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
-  build-depends:  base   >=4.6 && <4.8, 
+  build-depends:  base   >=4.6, 
                   random >=1.0 && <1.1,
+                  ghc-prim >= 0.3,
                   transformers >=0.3 && <0.4, 
                   atomic-primops >=0.6 && <0.7
 --                  lvish >=1.1 && <1.2
