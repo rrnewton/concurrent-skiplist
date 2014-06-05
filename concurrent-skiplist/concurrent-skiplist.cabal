@@ -32,8 +32,6 @@ library
                   ghc-prim >= 0.3,
                   transformers >=0.3 && <0.4, 
                   atomic-primops >=0.6 && <0.7
---                  lvish >=1.1 && <1.2
-  -- hs-source-dirs:      
   default-language:    Haskell2010
 
 
@@ -45,22 +43,12 @@ test-suite test-concurrent-skiplist
 
     build-depends: concurrent-skiplist
     build-depends: base    >= 4.6 && <= 4.8, 
-                   deepseq >= 1.3, 
-                   containers >= 0.5, 
-                   lattices   >= 1.2, 
-                   vector >=0.10,
-                   atomic-primops >= 0.6, 
-                   random, 
-                   transformers,
-                   ghc-prim,
-                   async,
-                   -- Used in NatArray:
-                   bits-atomic, missing-foreign
---    build-depends:  lvish >= 1.1 && < 1.2
+                   random >= 1.0, 
+                   async
     build-depends: test-framework, test-framework-hunit, test-framework-th, 
                    test-framework-quickcheck2, QuickCheck,
                    HUnit, time, text
-
+    default-language:    Haskell2010
     -- Atomic-primops fails when used by template-haskell/ghci on linux:
     if impl(ghc < 7.7) && os(linux) {
       buildable: False
