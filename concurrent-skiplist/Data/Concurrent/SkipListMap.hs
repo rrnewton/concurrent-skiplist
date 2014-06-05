@@ -387,6 +387,7 @@ defaultLevels = 8
 -- | SLMap's can provide an instance of the generic concurrent map interface.
 instance C.ConcurrentInsertMap SLMap where
   type Key SLMap k = (Ord k)
+  --  type Key SLMap = Ord 
   
   new = newSLMap defaultLevels
 

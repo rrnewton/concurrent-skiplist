@@ -17,8 +17,13 @@ class ConcurrentInsertMap mp where
 
   -- | Different implementations may place different constraints on
   -- what is required of keys: for example Eq or Hashable.
+  --  
   type Key mp k :: Constraint
-    
+  -- This type implies that the constraint can be different for differnt key types...  That shouldn't be.
+
+  -- type Key mp :: * -> Constraint -- There are some ugly trade-offs here when
+  -- writing instances, because we have no type-level lambda....  
+
   -- | Creates a new concurrent-map.
   new :: IO (mp k v)
 
@@ -26,7 +31,7 @@ class ConcurrentInsertMap mp where
   newSized :: Int -> IO (mp k v)
   newSized _ = new
 
-  -- | Insert an entry.  This can be called from many different threads concurrently.
+  -- | Insert an entry.  This can be called from many different threads concurrently.  
   insert :: (Key mp k) => mp k v -> k -> v -> IO ()
   -- FIXME!  What are the semantics of repeated insertion?
 
