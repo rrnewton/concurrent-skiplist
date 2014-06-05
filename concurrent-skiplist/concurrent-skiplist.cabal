@@ -32,12 +32,35 @@ library
                   ghc-prim >= 0.3,
                   transformers >=0.3 && <0.4, 
                   atomic-primops >=0.6 && <0.7
+
+  -- For building test-suites.  This could go in a separate package:
+  build-depends: HUnit, test-framework, test-framework-hunit
+
   default-language:    Haskell2010
 
 
 test-suite test-concurrent-skiplist
     type:	    exitcode-stdio-1.0
     main-is:        SkipListTests.hs
+    hs-source-dirs: tests/ 
+    ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
+
+    build-depends: concurrent-skiplist
+    build-depends: base    >= 4.6 && <= 4.8, 
+                   random >= 1.0, 
+                   async
+    build-depends: test-framework, test-framework-hunit, test-framework-th, 
+                   test-framework-quickcheck2, QuickCheck,
+                   HUnit, time, text
+    default-language:    Haskell2010
+    -- Atomic-primops fails when used by template-haskell/ghci on linux:
+    if impl(ghc < 7.7) && os(linux) {
+      buildable: False
+    }
+
+test-suite test-concurrent-skiplist2
+    type:	    exitcode-stdio-1.0
+    main-is:        GenericTests.hs
     hs-source-dirs: tests/ 
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
 

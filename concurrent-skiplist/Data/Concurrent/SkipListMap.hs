@@ -5,6 +5,8 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-} -- for debugging
 
+{-# LANGUAGE TypeFamilies #-}
+
 -- | An implementation of concurrent finite maps based on skip lists.  Only
 -- supports lookup and insertions, not modifications or removals.
 --
@@ -50,6 +52,10 @@ import Data.Atomics
 import qualified Data.Concurrent.LinkedMap as LM
 import Prelude hiding (map)
 import qualified Prelude as P
+
+import qualified Data.Concurrent.Map.Class as C
+
+--------------------------------------------------------------------------------
 
 
 -- | The GADT representation.  The type @t@ gives the type of nodes at a given
@@ -118,6 +124,7 @@ find_ (Index m slm) shortcut k = do
 data PutResult v = Added v | Found v
 
 -- {-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> Par e s v -> Par e s (PutResult v)  #-}
+{-# INLINABLE putIfAbsent_ #-}
 
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
@@ -129,7 +136,9 @@ putIfAbsent :: (Ord k, MonadIO m, MonadToss m) =>
 putIfAbsent (SLMap slm _) k vc = 
   putIfAbsent_ slm Nothing k vc toss $ \_ _ -> return ()
 
+
 -- {-# SPECIALIZE  putIfAbsentToss :: (Ord k) => SLMap k v -> k -> Par e s v -> Par e s Bool -> Par e s (PutResult v)  #-}
+{-# INLINABLE putIfAbsentToss #-}
 
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
@@ -368,3 +377,29 @@ debugShow (Slice (SLMap index lmbot) mstart mend) =
           else return "_"
       rest <- loop slm
       return $ unwords strs : rest
+
+
+--------------------------------------------------------------------------------
+
+defaultLevels :: Int
+defaultLevels = 8
+
+-- | SLMap's can provide an instance of the generic concurrent map interface.
+instance C.ConcurrentInsertMap SLMap where
+  type Key SLMap k = (Ord k)
+  
+  new = newSLMap defaultLevels
+
+  -- Here we base the number of index levels on the expected size:
+  newSized n = newSLMap (ceiling (logBase 2 (fromIntegral n) :: Double))
+    
+  {-# INLINABLE insert #-}
+  insert mp k v = do
+    res <- putIfAbsent mp k (return v)
+    case res of
+      Added _ -> return ()
+      Found _ -> error "Could not insert into SLMap, key already present!"
+
+  {-# INLINABLE lookup #-}
+  lookup = find
+    

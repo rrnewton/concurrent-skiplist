@@ -24,10 +24,12 @@ class ConcurrentInsertMap mp where
 
   -- | Creates a new map with an expected size.
   newSized :: Int -> IO (mp k v)
+  newSized _ = new
 
   -- | Insert an entry.  This can be called from many different threads concurrently.
   insert :: (Key mp k) => mp k v -> k -> v -> IO ()
-  
+  -- FIXME!  What are the semantics of repeated insertion?
+
   -- | Looks up a key-value mapping.  Note that this may race with insert, in which
   -- case either `Nothing` or `Just` could be returned.
   lookup :: (Key mp k) => mp k v -> k -> IO (Maybe v)
@@ -35,6 +37,13 @@ class ConcurrentInsertMap mp where
   -- foldM
   -- mapM_
   -- computeOverhead
+
+  -- TODO: Some form of approximate (lower bound) on size would be useful,
+  -- many data structures could provide this, and others could just say "zero".
+
+  -- TODO: Should there be a notion of "freezing" so as to enable non-threadsafe
+  -- operations, like computing the exact size?
+  -- (This concept is present in LVish, but might make sense at this level as well.)
 
 
 -- | A fully functional concurrent map that allows concurrent deletion as well as
