@@ -4,8 +4,9 @@
 --
 -- This is modeled after `Data.HashTable.Class`
 
-module Data.Concurrent.Map.Class where
-
+module Data.Concurrent.Map.Class
+       (ConcurrentInsertMap(..), ConcurrentMap(..))
+       where
 
 import GHC.Prim (Constraint)
 --------------------------------------------------------------------------------

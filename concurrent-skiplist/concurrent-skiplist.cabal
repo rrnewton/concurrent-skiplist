@@ -24,8 +24,6 @@ library
                      Data.Concurrent.Map.Tests
 
                      Data.Concurrent.Internal.MonadToss
---  other-modules:     Control.Reagent,
-
 
   other-extensions:  NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs, 
                      ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
@@ -37,3 +35,33 @@ library
 --                  lvish >=1.1 && <1.2
   -- hs-source-dirs:      
   default-language:    Haskell2010
+
+
+test-suite test-concurrent-skiplist
+    type:	    exitcode-stdio-1.0
+    main-is:        SkipListTests.hs
+    hs-source-dirs: tests/ 
+    ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
+
+    build-depends: concurrent-skiplist
+    build-depends: base    >= 4.6 && <= 4.8, 
+                   deepseq >= 1.3, 
+                   containers >= 0.5, 
+                   lattices   >= 1.2, 
+                   vector >=0.10,
+                   atomic-primops >= 0.6, 
+                   random, 
+                   transformers,
+                   ghc-prim,
+                   async,
+                   -- Used in NatArray:
+                   bits-atomic, missing-foreign
+--    build-depends:  lvish >= 1.1 && < 1.2
+    build-depends: test-framework, test-framework-hunit, test-framework-th, 
+                   test-framework-quickcheck2, QuickCheck,
+                   HUnit, time, text
+
+    -- Atomic-primops fails when used by template-haskell/ghci on linux:
+    if impl(ghc < 7.7) && os(linux) {
+      buildable: False
+    }
