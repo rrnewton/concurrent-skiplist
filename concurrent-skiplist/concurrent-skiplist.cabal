@@ -76,3 +76,11 @@ test-suite test-concurrent-skiplist2
     if impl(ghc < 7.7) && os(linux) {
       buildable: False
     }
+
+benchmark bench-concurrent-skiplist
+    type: exitcode-stdio-1.0
+    main-is: Bench.hs
+    hs-source-dirs: tests/
+    build-depends: concurrent-skiplist
+    build-depends: base >= 4.6 && <= 4.8
+                   , criterion >= 1.0
