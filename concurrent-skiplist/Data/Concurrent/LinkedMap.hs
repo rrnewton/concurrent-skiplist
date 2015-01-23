@@ -53,10 +53,10 @@ data Token k v = Token {
   nextTicket  :: Ticket (LMList k v)  -- ^ a ticket for the old value of nextRef
 }
 
--- | Either the value associated with a key, or else a token at the position
--- where that key should go.
+-- | Either a reference to the value associated with a key, or else a
+-- token at the position where that key should go.
 data FindResult k v =
-    Found v
+    Found (IORef v)
   | NotFound (Token k v)
 
 -- | Attempt to locate a key in the map
@@ -73,7 +73,7 @@ find m k = findInner m Nothing
           v' <- readIORef vref
           case compare k k' of
             LT -> return stopHere
-            EQ -> return $ Found v'
+            EQ -> return $ Found vref
             GT -> findInner next (Just v')
       
 -- | Attempt to insert a key/value pair at the given location (where the key is
@@ -102,7 +102,6 @@ foldlWithKey liftIO f !a !m = do
       v <- liftIO $ readIORef vref
       a' <- f a k v
       foldlWithKey liftIO f a' next
-
 
 -- | Map over a snapshot of the list.  Inserts that arrive concurrently may or may
 -- not be included.  This does not affect keys, so the physical structure remains the

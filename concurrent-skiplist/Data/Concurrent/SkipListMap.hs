@@ -102,7 +102,7 @@ find_ :: Ord k => SLMap_ k v t -> Maybe t -> k -> IO (Maybe v)
 find_ (Bottom m) shortcut k = do
   searchResult <- LM.find (fromMaybe m shortcut) k
   case searchResult of
-    LM.Found v      -> return $ Just v
+    LM.Found vref   -> fmap Just $ readIORef vref
     LM.NotFound tok -> return Nothing
     
 -- At an indexing level: attempt to use the index to shortcut into the level
@@ -110,7 +110,8 @@ find_ (Bottom m) shortcut k = do
 find_ (Index m slm) shortcut k = do 
   searchResult <- LM.find (fromMaybe m shortcut) k
   case searchResult of 
-    LM.Found (_, v) -> 
+    LM.Found ref -> do
+      (_, v) <- readIORef ref
       return $ Just v   -- the key is in the index itself; we're outta here
     LM.NotFound tok -> case LM.value tok of
       Just (m', _) -> find_ slm (Just m') k     -- there's an index node
@@ -168,7 +169,7 @@ putIfAbsent_ (Bottom m) shortcut k vc coin install = retryLoop vc where
   retryLoop vc = do
     searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
     case searchResult of
-      LM.Found v      -> return $ Found v
+      LM.Found vref   -> liftIO $ fmap Found $ readIORef vref
       LM.NotFound tok -> do
         v <- vc
         maybeMap <- liftIO $ LM.tryInsert tok v
@@ -183,7 +184,9 @@ putIfAbsent_ (Bottom m) shortcut k vc coin install = retryLoop vc where
 putIfAbsent_ (Index m slm) shortcut k vc coin install = do          
   searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
   case searchResult of 
-    LM.Found (_, v) -> return $ Found v -- key is in the index; bail out
+    LM.Found ref -> do
+      (_, v) <- liftIO $ readIORef ref
+      return $ Found v
     LM.NotFound tok -> 
       let install' mBelow v = do        -- to add an index node here,
             shouldAdd <- coin           -- first, see if we (probabilistically) should
