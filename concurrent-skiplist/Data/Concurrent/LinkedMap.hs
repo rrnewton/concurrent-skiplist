@@ -36,8 +36,8 @@ import Prelude hiding (reverse, map, head)
 
 -- | A concurrent finite map, represented as a linked list
 data LMList k v = 
-    Node k v {-# UNPACK #-} !(IORef (LMList k v))
-  | Empty 
+    Node k {-# UNPACK #-} !(IORef v) {-# UNPACK #-} !(IORef (LMList k v))
+  | Empty
 
 type LMap k v = IORef (LMList k v)
 
@@ -69,7 +69,8 @@ find m k = findInner m Nothing
       let stopHere = NotFound $ Token {keyToInsert = k, value = v, nextRef = m, nextTicket}
       case peekTicket nextTicket of
         Empty -> return stopHere
-        Node k' v' next -> 
+        Node k' vref next -> do
+          v' <- readIORef vref
           case compare k k' of
             LT -> return stopHere
             EQ -> return $ Found v'
@@ -82,7 +83,8 @@ find m k = findInner m Nothing
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
 tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
   newRef <- newIORef $ peekTicket nextTicket
-  (success, _) <- casIORef nextRef nextTicket $ Node keyToInsert v newRef
+  vref <- newIORef v
+  (success, _) <- casIORef nextRef nextTicket $ Node keyToInsert vref newRef
   return $ if success then Just nextRef else Nothing
 
 -- | Concurrently fold over all key/value pairs in the map within the given
@@ -96,7 +98,8 @@ foldlWithKey liftIO f !a !m = do
   n <- liftIO$ readIORef m
   case n of
     Empty -> return a
-    Node k v next -> do
+    Node k vref next -> do
+      v <- liftIO $ readIORef vref
       a' <- f a k v
       foldlWithKey liftIO f a' next
 
@@ -108,8 +111,9 @@ map :: MonadIO m => (a -> b) -> LMap k a -> m (LMap k b)
 map fn mp = do 
  tmp <- foldlWithKey liftIO
                      (\ acc k v -> do
-                      r <- liftIO (newIORef acc)
-                      return$! Node k (fn v) r)
+                      r <- liftIO $ newIORef acc
+                      vref <- liftIO . newIORef $ fn v
+                      return$! Node k vref r)
                      Empty mp
  tmp' <- liftIO (newIORef tmp)
  -- Here we suffer a reverse to avoid blowing the stack. 
@@ -140,7 +144,8 @@ toList lm = do
   x <- readIORef lm
   case x of
     Empty       -> return []
-    Node k v tl -> do
+    Node k vref tl -> do
+      v <- readIORef vref
       ls <- toList tl
       return $! (k,v) : ls 
 
@@ -151,7 +156,8 @@ fromList ls = do
       loop ((k,v):tl) = do
         tl' <- loop tl
         ref <- newIORef tl'
-        return $! Node k v ref
+        vref <- newIORef v
+        return $! Node k vref ref
   lm <- loop ls
   newIORef lm
 
