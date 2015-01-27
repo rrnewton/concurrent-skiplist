@@ -201,6 +201,65 @@ putIfAbsent_ (Index m slm) shortcut k vc coin install = do
         Just (m', _) -> putIfAbsent_ slm (Just m') k vc coin install'
         Nothing      -> putIfAbsent_ slm Nothing   k vc coin install'
 
+-- | Add a key/value pair, overwriting the value if present.
+putOverwrite :: (Ord k, MonadIO m, MonadToss m) =>
+                SLMap k v
+                -> k
+                -> m v
+                -> m ()
+putOverwrite (SLMap slm _) k vc =
+  putOverwrite_ slm Nothing k vc toss $ \_ _ -> return ()
+
+-- Helper for putOverwrite; similar to putIfAbsent_.
+putOverwrite_ :: (Ord k, MonadIO m) =>
+                 SLMap_ k v t -- ^ The map
+                 -> Maybe t -- ^ A shortcut into this skiplist level
+                 -> k -- ^ The key to insert
+                 -> m v -- ^ A computation for the value
+                 -> m Bool -- ^ The coin tosser
+                 -> (t -> v -> m ())  -- ^ A thunk for inserting into the higher
+                                     -- levels of the skiplist
+                 -> m ()
+putOverwrite_ (Bottom m) shortcut k vc coin install = retryLoop vc where
+  retryLoop vc = do
+    searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
+    v <- vc
+    case searchResult of
+      LM.Found vref -> do
+        tick <- liftIO $ readForCAS vref
+        (success, _) <- liftIO $ casIORef vref tick v
+        case success of
+          True -> return ()
+          False -> retryLoop $ return v
+      LM.NotFound tok -> do
+        maybeMap <- liftIO $ LM.tryInsert tok v
+        case maybeMap of
+          Just m' -> install m' v
+          Nothing -> retryLoop $ return v
+putOverwrite_ (Index m slm) shortcut k vc coin install = retryLoop vc where
+  retryLoop vc = do
+    searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
+    v <- vc
+    case searchResult of
+      LM.Found vref -> do
+        tick <- liftIO $ readForCAS vref
+        let (m', v') = peekTicket tick
+        (success, _) <- liftIO $ casIORef vref tick (m', v)
+        case success of
+          True -> return () -- TODO: insert into higher levels on success?
+          False -> retryLoop $ return v
+      LM.NotFound tok ->
+        let install' mBelow v = do
+              shouldAdd <- coin
+              when shouldAdd $ do
+                maybeHere <- liftIO $ LM.tryInsert tok (mBelow, v)
+                case maybeHere of
+                  Just mHere -> install mHere v
+                  Nothing -> return ()
+        in case LM.value tok of
+          Just (m', _) -> putOverwrite_ slm (Just m') k vc coin install'
+          Nothing -> putOverwrite_ slm Nothing k vc coin install'
+
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
