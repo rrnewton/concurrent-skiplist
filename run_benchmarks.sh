@@ -103,7 +103,6 @@ CRITUPLOAD=hsbencher-fusion-upload-criterion-0.3.7
 
 executable=bench-concurrent-skiplist
     
-cd "$CHECKOUT"/concurrent-skiplist
 cabal sandbox init
 
 TAG=`date +'%s'`

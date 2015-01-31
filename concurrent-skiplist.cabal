@@ -16,6 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
+  hs-source-dirs: src/ 
   exposed-modules:   Data.Concurrent.LinkedMap, 
                      Data.Concurrent.SkipListMap
 
@@ -82,5 +83,5 @@ benchmark bench-concurrent-skiplist
     main-is: Bench.hs
     hs-source-dirs: tests/
     build-depends: concurrent-skiplist
-    build-depends: base >= 4.6 && <= 4.8
-                   , criterion >= 1.0
+    build-depends: base >= 4.6 && <= 4.8,
+                   criterion >= 1.0
