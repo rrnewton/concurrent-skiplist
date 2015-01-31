@@ -85,6 +85,7 @@ benchmark bench-concurrent-skiplist
     type: exitcode-stdio-1.0
     main-is: Bench.hs
     hs-source-dirs: tests/
+    ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4    
     build-depends: concurrent-skiplist
     build-depends: base >= 4.6 && <= 4.8,
                    criterion >= 1.0

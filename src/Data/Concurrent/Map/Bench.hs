@@ -40,22 +40,30 @@ mkBenchSuite name Proxy = do
       blit :: (mp Key Val) -> Int64 -> IO ()
       blit mp num = for_ 1 num $ \i -> C.insert mp i i
 
-  let sizes = [ 10^e | e <- [0,1,2,3,4::Int]]
+  let sizes    = [ 10^e | e <- [0,1,2,3,4::Int]]
+      -- We need bigger sizes in parallel.. amortize forkJoin 
+      parSizes = [ 10^e | e <- [4,5::Int]]
   numCap <- getNumCapabilities
+  putStrLn $ "Running benchmarks for "++show numCap++" threads"
   -- rep performGC 5 -- For pushing data to oldest generation.
-  putStrLn "Done preallocating."
+  -- putStrLn "Done preallocating."
   return $
     [ PreBench (name++"/new") (rep (C.new :: IO (mp Key Val))) ] ++
-    [ PreBench (name++"/insert"++show n) (rep (fillN n))
+    [ PreBench (name++"/insert-"++show n) (rep (fillN n))
     | n <- sizes ] ++ 
 
     -- Parallel benchmarks:
     [ PreBench (name++"/parBarrier-insert"++show elems)
       -- Here we have the sequential loop on the outside, barriers for
       -- each criterion iteration:
-      (rep (do mp <- C.new
-               forkJoin numCap (\_ -> blit mp elems)))
-    | elems <- sizes ]
+      (rep (do mp <- C.new :: IO (mp Key Val)
+               let quota :: Int64
+                   quota = fromIntegral (elems `quot` numCap)
+               forkJoin numCap (\chunk -> 
+                                 let offset = fromIntegral (chunk * fromIntegral quota) in
+                                 for_ offset (offset+quota-1) $
+                                 \i -> C.insert mp i i)))
+    | elems <- parSizes ]
 
     -- Here we instead elide the barriers and pre-allocate the
     -- structures we will operate on.  We thus allow different
