@@ -6,6 +6,9 @@ set -x
 # Step 0: Configuration options:
 # ================================================================================
 
+# Extra arguments are given to "cabal install"
+EXTRAARGS=$*
+
 TABLENAME=AdaptivelyScalable
 
 # All regressions to be performed by Criterion:
@@ -109,7 +112,7 @@ TAG=`date +'%s'`
     
 echo "Installing benchmark program."
 which -a ghc-$JENKINS_GHC
-cabal install -w ghc-$JENKINS_GHC --with-ghc-pkg=ghc-pkg-$JENKINS_GHC --enable-benchmarks
+cabal install -w ghc-$JENKINS_GHC --with-ghc-pkg=ghc-pkg-$JENKINS_GHC --enable-benchmarks $EXTRAARGS
 cabal configure --enable-benchmarks
 cabal build ${executable}
 
