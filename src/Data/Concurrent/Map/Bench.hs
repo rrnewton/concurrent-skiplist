@@ -9,7 +9,8 @@ module Data.Concurrent.Map.Bench
 
 import Control.Exception
 -- import Control.DeepSeq
-import Control.Concurrent (getNumCapabilities)
+import Control.Concurrent (getNumCapabilities, forkOn, forkIO)
+import Control.Concurrent.MVar
 import Control.Concurrent.Async (wait, withAsyncOn)
 import qualified Data.Concurrent.Map.Class as C
 import Data.Concurrent.LinkedMap as LM
@@ -41,9 +42,12 @@ mkBenchSuite name Proxy = do
       blit mp num = for_ 1 num $ \i -> C.insert mp i i
 
   let sizes    = [ 10^e | e <- [0,1,2,3,4::Int]]
-      -- We need bigger sizes in parallel.. amortize forkJoin 
-      parSizes = [ 10^e | e <- [4,5::Int]]
+      -- We need bigger sizes in parallel.. amortize forkJoin
+      parSizes :: [Int]
+      parSizes = [ 10000, 100000, 500000 ]
   numCap <- getNumCapabilities
+--  let splits = 8 * numCap -- OVERPARTITION
+  let splits = numCap -- 1-1 thread per core
   putStrLn $ "Running benchmarks for "++show numCap++" threads"
   -- rep performGC 5 -- For pushing data to oldest generation.
   -- putStrLn "Done preallocating."
@@ -58,11 +62,12 @@ mkBenchSuite name Proxy = do
       -- each criterion iteration:
       (rep (do mp <- C.new :: IO (mp Key Val)
                let quota :: Int64
-                   quota = fromIntegral (elems `quot` numCap)
-               forkJoin numCap (\chunk -> 
-                                 let offset = fromIntegral (chunk * fromIntegral quota) in
+                   quota = fromIntegral (elems `quot` splits)
+               forkJoin splits (\chunk -> do 
+                                 let offset = fromIntegral (chunk * fromIntegral quota) 
+                                 putStrLn ("Running loop iters "++show (offset, (offset+quota-1)))
                                  for_ offset (offset+quota-1) $
-                                 \i -> C.insert mp i i)))
+                                   \i -> C.insert mp i i)))
     | elems <- parSizes ]
 
     -- Here we instead elide the barriers and pre-allocate the
@@ -83,10 +88,32 @@ makeNfillN = do
 forkJoin :: Int -> (Int -> IO ()) -> IO ()
 forkJoin num act = loop num []
  where
-  -- This strategy makes things exception safe:
+  act' n = do putStrLn $ "Start action "++show n++" of "++show num
+              act n
+              putStrLn $ "End action "++show n++" of "++show num
+{-
+  -- VERSION 1: This strategy makes things exception safe:
   loop 0 ls = mapM_ wait ls
-  loop n ls = withAsyncOn n (act (n-1)) $ \ asnc -> 
+  loop n ls = withAsyncOn (n-1) (act' (n-1)) $ \ asnc ->                  
                loop (n-1) (asnc:ls)
+-}
+{-
+  -- VERSION 2: The less safe version:
+  loop 0 ls = mapM_ takeMVar ls
+  loop n ls = do mv <- newEmptyMVar
+                 _ <- forkOn (n-1) (do act' (n-1); putMVar mv ())
+                 loop (n-1) (mv:ls)
+-}
+  -- Both VER 1&2 are exhibiting problems with SLMap where the different workers
+  -- take VASTLY different amounts of time.  There's still >2X par speedup, but
+  -- the threadscope looks suspicious.
+
+  -- VERSION 3: No pinning:  Just switching to this version slows us down a bit
+  -- but not much.  However, it will allow overpartitioning.
+  loop 0 ls = mapM_ takeMVar ls
+  loop n ls = do mv <- newEmptyMVar
+                 _  <- forkIO (do act' (n-1); putMVar mv ())
+                 loop (n-1) (mv:ls)
 
 
 {- 
