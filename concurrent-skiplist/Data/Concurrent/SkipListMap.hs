@@ -27,7 +27,7 @@
 -- each of which has a different type (since it indexes the layer below it).
 
 module Data.Concurrent.SkipListMap (
-  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts,
+  SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, putOverwrite, foldlWithKey, counts,
   -- map: is not exposed, because it has that FINISHME for now... [2013.10.01]
   debugShow, 
 
