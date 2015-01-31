@@ -27,6 +27,7 @@ class ConcurrentInsertMap mp where
   -- | Creates a new concurrent-map.
   new :: IO (mp k v)
 
+  {-# INLINE newSized #-}
   -- | Creates a new map with an expected size.
   newSized :: Int -> IO (mp k v)
   newSized _ = new

@@ -34,6 +34,10 @@ import Control.Monad.IO.Class
 import Control.Exception (assert)
 import Prelude hiding (reverse, map, head)
 
+import qualified Data.Concurrent.Map.Class as C
+
+--------------------------------------------------------------------------------
+
 -- | A concurrent finite map, represented as a linked list
 data LMList k v = 
     Node k v {-# UNPACK #-} !(IORef (LMList k v))
@@ -216,3 +220,26 @@ findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
 findIndex ls1 ls2 =
   error "FINISHME - LinkedMap.findIndex"
 
+{-
+-- | LinkedMap can provide an instance of the generic concurrent map interface,
+--   but be warned that it has O(N) complexity on find and insert.
+instance C.ConcurrentInsertMap LMap where
+  type Key LMap k = (Ord k)
+
+  {-# INLINABLE new #-}
+  new = newSLMap defaultLevels
+
+  {-# INLINABLE newSized #-}
+  -- Here we base the number of index levels on the expected size:
+  newSized n = newSLMap (ceiling (logBase 2 (fromIntegral n) :: Double))
+    
+  {-# INLINABLE insert #-}
+  insert mp k v = do
+    res <- putIfAbsent mp k (return v)
+    case res of
+      Added _ -> return ()
+      Found _ -> error "Could not insert into SLMap, key already present!"
+
+  {-# INLINABLE lookup #-}
+  lookup = find
+-}

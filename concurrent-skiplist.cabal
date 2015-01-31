@@ -23,6 +23,7 @@ library
                      -- These may later be factored into another package:
                      Data.Concurrent.Map.Class
                      Data.Concurrent.Map.Tests
+                     Data.Concurrent.Map.Bench
 
                      Data.Concurrent.Internal.MonadToss
 

@@ -388,9 +388,11 @@ defaultLevels = 8
 instance C.ConcurrentInsertMap SLMap where
   type Key SLMap k = (Ord k)
   --  type Key SLMap = Ord 
-  
+
+  {-# INLINABLE new #-}
   new = newSLMap defaultLevels
 
+  {-# INLINABLE newSized #-}
   -- Here we base the number of index levels on the expected size:
   newSized n = newSLMap (ceiling (logBase 2 (fromIntegral n) :: Double))
     
@@ -403,4 +405,3 @@ instance C.ConcurrentInsertMap SLMap where
 
   {-# INLINABLE lookup #-}
   lookup = find
-    
