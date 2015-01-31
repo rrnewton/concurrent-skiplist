@@ -208,7 +208,7 @@ putOverwrite :: (Ord k, MonadIO m, MonadToss m) =>
                 -> m v
                 -> m ()
 putOverwrite (SLMap slm _) k vc =
-  putOverwrite_ slm Nothing k vc toss (\_ _ -> return ()) (\_ _ -> return ())
+  putOverwrite_ slm Nothing k vc toss (\_ _ -> return ())
 
 -- Helper for putOverwrite; similar to putIfAbsent_.
 putOverwrite_ :: (Ord k, MonadIO m) =>
@@ -217,12 +217,10 @@ putOverwrite_ :: (Ord k, MonadIO m) =>
                  -> k -- ^ The key to insert
                  -> m v -- ^ A computation for the value
                  -> m Bool -- ^ The coin tosser
-                 -> (t -> v -> m ())  -- ^ A thunk for inserting into the higher
-                                      -- levels if the key is already present
-                 -> (t -> v -> m ())  -- ^ A thunk for inserting into the higher
-                                      -- levels if the key is absent
+                 -> (t -> v -> m ())  -- ^ A thunk for inserting into
+                                      -- the higher levels
                  -> m ()
-putOverwrite_ (Bottom m) shortcut k vc coin present absent = retryLoop vc where
+putOverwrite_ (Bottom m) shortcut k vc coin install = retryLoop vc where
   retryLoop vc = do
     searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
     v <- vc
@@ -232,12 +230,12 @@ putOverwrite_ (Bottom m) shortcut k vc coin present absent = retryLoop vc where
         let m' = peekTicket tick
         (success, _) <- liftIO $ casIORef vref tick v
         case success of
-          True -> return () -- present m' v
+          True -> return ()
           False -> retryLoop $ return v
       LM.NotFound tok -> do
         maybeMap <- liftIO $ LM.tryInsert tok v
         case maybeMap of
-          Just m' -> absent m' v
+          Just m' -> install m' v
           Nothing -> retryLoop $ return v
 putOverwrite_ (Index m slm) shortcut k vc coin install = retryLoop vc where
   retryLoop vc = do
@@ -249,7 +247,7 @@ putOverwrite_ (Index m slm) shortcut k vc coin install = retryLoop vc where
         let (m', v') = peekTicket tick
         (success, _) <- liftIO $ casIORef vref tick (m', v)
         case success of
-          True -> return () -- putOverwrite_ slm (Just m') k vc coin (\_ _ -> return ())
+          True -> return ()
           False -> retryLoop $ return v
       LM.NotFound tok ->
         let install' mBelow v = do
