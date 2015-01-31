@@ -86,34 +86,32 @@ makeNfillN = do
 -- | Run N copies of an IO action in parallel.  Pass in a number from
 -- 0..N-1, letting the worker know which it is.
 forkJoin :: Int -> (Int -> IO ()) -> IO ()
-forkJoin num act = loop num []
+forkJoin num act = loop2 num []
  where
   act' n = do putStrLn $ "Start action "++show n++" of "++show num
               act n
               putStrLn $ "End action "++show n++" of "++show num
-{-
+
   -- VERSION 1: This strategy makes things exception safe:
   loop 0 ls = mapM_ wait ls
   loop n ls = withAsyncOn (n-1) (act' (n-1)) $ \ asnc ->                  
                loop (n-1) (asnc:ls)
--}
-{-
+
   -- VERSION 2: The less safe version:
-  loop 0 ls = mapM_ takeMVar ls
-  loop n ls = do mv <- newEmptyMVar
-                 _ <- forkOn (n-1) (do act' (n-1); putMVar mv ())
-                 loop (n-1) (mv:ls)
--}
+  loop2 0 ls = mapM_ takeMVar ls
+  loop2 n ls = do mv <- newEmptyMVar
+                  _ <- forkOn (n-1) (do act' (n-1); putMVar mv ())
+                  loop2 (n-1) (mv:ls)
   -- Both VER 1&2 are exhibiting problems with SLMap where the different workers
   -- take VASTLY different amounts of time.  There's still >2X par speedup, but
   -- the threadscope looks suspicious.
 
   -- VERSION 3: No pinning:  Just switching to this version slows us down a bit
   -- but not much.  However, it will allow overpartitioning.
-  loop 0 ls = mapM_ takeMVar ls
-  loop n ls = do mv <- newEmptyMVar
-                 _  <- forkIO (do act' (n-1); putMVar mv ())
-                 loop (n-1) (mv:ls)
+  loop3 0 ls = mapM_ takeMVar ls
+  loop3 n ls = do mv <- newEmptyMVar
+                  _  <- forkIO (do act' (n-1); putMVar mv ())
+                  loop3 (n-1) (mv:ls)
 
 
 {- 
