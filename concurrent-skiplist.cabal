@@ -32,11 +32,11 @@ library
                   random >=1.0 && <1.1,
                   ghc-prim >= 0.3,
                   transformers >=0.3 && <0.4, 
-                  atomic-primops >=0.6 && <0.7
+                  atomic-primops >=0.6 && < 0.8
 
   -- For building test-suites.  This could go in a separate package:
   build-depends: HUnit, test-framework, test-framework-hunit
-
+  ghc-options:  -O2 
   default-language:    Haskell2010
 
 
