@@ -1,6 +1,9 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 -- | A concurrent finite map represented as a single linked list.  
 --
@@ -33,9 +36,38 @@ import Data.Atomics
                          -- to use it.
 import Control.Monad.IO.Class
 import Control.Exception (assert)
+import Control.Monad.IO.Class
 import Prelude hiding (reverse, map, head)
-
+import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Concurrent.Map.Class as C
+
+-- import Foreign.C.String (newCString, CString)
+import Foreign.C.String (CString)
+import GHC.Foreign (newCString)
+import GHC.Prim (traceEvent#)
+import GHC.IO (IO(..))
+import GHC.IO.Encoding (utf8)
+import GHC.Ptr(Ptr(Ptr))
+
+--------------------------------------------------------------------------------
+
+{-# INLINE traceit #-}
+traceit :: CString -> IO ()
+#if 1
+traceit (Ptr p) =
+   IO (\s -> case traceEvent# p s of s' -> (# s', () #) )
+#else
+traceit _ = return ()
+#endif
+
+{-# NOINLINE tagFind #-}
+-- | Pre-allocate some tags:
+tagFind, tagInsert :: CString
+
+tagFind = unsafePerformIO (newCString utf8 "black:start_findInner")
+
+tagInsert = unsafePerformIO (newCString utf8 "black:start_insert")
+
 
 --------------------------------------------------------------------------------
 
@@ -72,6 +104,7 @@ find :: Ord k => LMap k v -> k -> IO (FindResult k v)
 find (LMap !m) !k = findInner m Nothing 
   where 
     findInner m v = do
+      traceit tagFind
       nextTicket <- readForCAS m
       let stopHere = NotFound $! Token {keyToInsert = k, value = v, nextRef = m, nextTicket}
       case peekTicket nextTicket of
@@ -88,6 +121,7 @@ find (LMap !m) !k = findInner m Nothing
 {-# INLINE tryInsert #-}            
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
 tryInsert !Token{ keyToInsert, nextRef, nextTicket } !v = do
+  traceit tagInsert
   newRef <- newIORef $! peekTicket nextTicket
   (success, _) <- casIORef nextRef nextTicket $! Node keyToInsert v newRef
   return $ if success then Just $! (LMap nextRef) else Nothing
