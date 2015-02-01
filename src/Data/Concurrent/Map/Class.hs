@@ -13,7 +13,7 @@ import GHC.Prim (Constraint)
 
 
 -- | A concurrent map that can grow but does not support deletion.
-class ConcurrentInsertMap mp where
+class ConcurrentInsertMap (mp :: * -> * -> *) where
 
   -- | Different implementations may place different constraints on
   -- what is required of keys: for example Eq or Hashable.
@@ -39,6 +39,12 @@ class ConcurrentInsertMap mp where
   -- | Looks up a key-value mapping.  Note that this may race with insert, in which
   -- case either `Nothing` or `Just` could be returned.
   lookup :: (Key mp k) => mp k v -> k -> IO (Maybe v)
+
+  -- | This plausible might be constant, logarithmic, or linear
+  -- complexity, depending on the implementation.  If it is run in a
+  -- sequential region its answer should be exact, otherwise
+  -- approximate.
+  estimateSize :: (Key mp k) => mp k v -> IO Int
 
   -- foldM
   -- mapM_

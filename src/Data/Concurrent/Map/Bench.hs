@@ -8,6 +8,7 @@ module Data.Concurrent.Map.Bench
        where
 
 import Control.Exception
+import Control.Monad
 -- import Control.DeepSeq
 import Control.Concurrent (getNumCapabilities, forkOn, forkIO)
 import Control.Concurrent.MVar
@@ -49,26 +50,40 @@ mkBenchSuite name Proxy = do
 --  let splits = 8 * numCap -- OVERPARTITION
   let splits = numCap -- 1-1 thread per core
   putStrLn $ "Running benchmarks for "++show numCap++" threads"
+
   -- rep performGC 5 -- For pushing data to oldest generation.
   -- putStrLn "Done preallocating."
+
+  let forkNFill elems = do
+        mp <- C.new :: IO (mp Key Val)
+        let quota :: Int64
+            quota = fromIntegral (elems `quot` splits)
+        forkJoin splits (\chunk -> do 
+                          let offset = fromIntegral (chunk * fromIntegral quota) 
+                          putStrLn ("Running loop iters "++show (offset, (offset+quota-1)))
+                          for_ offset (offset+quota-1) $
+                            \i -> C.insert mp i i)
+        return mp
+  
   return $
     [ PreBench (name++"/new") (rep (C.new :: IO (mp Key Val))) ] ++
     [ PreBench (name++"/insert-"++show n) (rep (fillN n))
     | n <- sizes ] ++ 
 
     -- Parallel benchmarks:
-    [ PreBench (name++"/parBarrier-insert"++show elems)
+    [ PreBench (name++"/parBarrier-insert+size"++show elems)
       -- Here we have the sequential loop on the outside, barriers for
       -- each criterion iteration:
-      (rep (do mp <- C.new :: IO (mp Key Val)
-               let quota :: Int64
-                   quota = fromIntegral (elems `quot` splits)
-               forkJoin splits (\chunk -> do 
-                                 let offset = fromIntegral (chunk * fromIntegral quota) 
-                                 putStrLn ("Running loop iters "++show (offset, (offset+quota-1)))
-                                 for_ offset (offset+quota-1) $
-                                   \i -> C.insert mp i i)))
-    | elems <- parSizes ]
+      (rep (do mp <- forkNFill elems
+               -- In the serial region, we ask what size it is:
+               _ <- C.estimateSize mp
+               return ()
+               ))
+    | elems <- parSizes ] ++
+    
+    [ PreBench (name++"/parBarrier-insert"++show elems)
+      (rep (void$ forkNFill elems)) | elems <- parSizes ]
+    
 
     -- Here we instead elide the barriers and pre-allocate the
     -- structures we will operate on.  We thus allow different

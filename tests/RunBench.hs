@@ -1,26 +1,79 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main where
 
 import Criterion.Main
 import Criterion.Types
 import Data.Int
+import Data.IORef
+import Data.Atomics (atomicModifyIORefCAS)
 import Data.Concurrent.LinkedMap as LM
 import Data.Concurrent.SkipListMap as SLM
-
-import Data.Concurrent.SkipListMap as SLM
 import Data.Concurrent.Map.Bench
+import Data.Concurrent.Map.Class
+-- import Control.Concurrent
 
+import qualified Data.Map as M
+
+cvt :: PreBench -> Benchmark
 cvt PreBench{name,batchRunner} =
     bench name (Benchmarkable batchRunner)
+
+-- Based on vanilla atomicModifyIORef.
+-- BAD! This is a SPACE LEAKING VERSION.
+newtype IOMap1 k v = IOMap1 (IORef (M.Map k v))
+instance ConcurrentInsertMap IOMap1 where
+  type Key IOMap1 k = Ord k
+  -- FIXME: use safe cast
+  new = do x <- newIORef M.empty; return $! IOMap1 x 
+  insert (IOMap1 r) k v =
+    atomicModifyIORef r (\ m -> (M.insert k v m, ()))
+  lookup (IOMap1 r) k = do m <- readIORef r
+                           return $! M.lookup k m
+  estimateSize (IOMap1 r) = do m <- readIORef r
+                               return $! M.size m
+
+-- WHNF strict version:
+newtype IOMap2 k v = IOMap2 (IORef (M.Map k v))
+instance ConcurrentInsertMap IOMap2 where
+  type Key IOMap2 k = Ord k
+  -- FIXME: use safe cast
+  new = do x <- newIORef M.empty; return $! IOMap2 x 
+  insert (IOMap2 r) k v =
+    atomicModifyIORef' r (\ m -> (M.insert k v m, ()))
+  lookup (IOMap2 r) k = do m <- readIORef r
+                           return $! M.lookup k m
+  estimateSize (IOMap2 r) = do m <- readIORef r
+                               return $! M.size m
+
+
+-- This version tries the speculative replacement for atomicModifyIORefCAS:
+newtype IOMap3 k v = IOMap3 (IORef (M.Map k v))
+instance ConcurrentInsertMap IOMap3 where
+  type Key IOMap3 k = Ord k
+  new = do x <- newIORef M.empty; return $! IOMap3 x 
+  insert (IOMap3 r) k v =
+    atomicModifyIORefCAS r (\ m -> (M.insert k v m, ()))
+  lookup (IOMap3 r) k = do m <- readIORef r
+                           return $! M.lookup k m
+  estimateSize (IOMap3 r) = do m <- readIORef r
+                               return $! M.size m
 
 
 main :: IO ()
 main = do
  suite <- mkBenchSuite "SLMap" (Proxy:: Proxy(SLMap Int64 Int64))
+ suite2 <- mkBenchSuite "PureMap1" (Proxy:: Proxy(IOMap1 Int64 Int64))
+ suite3 <- mkBenchSuite "PureMap2" (Proxy:: Proxy(IOMap2 Int64 Int64))
+ suite4 <- mkBenchSuite "PureMap3" (Proxy:: Proxy(IOMap3 Int64 Int64))  
+
  defaultMain $ 
-  Prelude.map cvt suite ++ 
+  Prelude.map cvt suite ++
+  Prelude.map cvt suite2 ++
+  Prelude.map cvt suite3 ++
+  Prelude.map cvt suite4 ++     
   -- Retain RAW benchmarks to make sure the extra class abstraction
   -- isn't costing us anything:
   [
