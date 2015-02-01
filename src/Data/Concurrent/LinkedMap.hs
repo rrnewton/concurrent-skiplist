@@ -40,7 +40,7 @@ import qualified Data.Concurrent.Map.Class as C
 
 -- | A concurrent finite map, represented as a linked list
 data LMList k v = 
-    Node k v {-# UNPACK #-} !(IORef (LMList k v))
+    Node !k !v {-# UNPACK #-} !(IORef (LMList k v))
   | Empty 
 
 type LMap k v = IORef (LMList k v)
@@ -51,10 +51,10 @@ newLMap = newIORef Empty
   
 -- | A position in the map into which a key/value pair can be inserted          
 data Token k v = Token {
-  keyToInsert :: k,                   -- ^ what key were we looking up?
-  value       :: Maybe v,             -- ^ the value at this position in the map
-  nextRef     :: IORef (LMList k v),  -- ^ the reference at which to insert
-  nextTicket  :: Ticket (LMList k v)  -- ^ a ticket for the old value of nextRef
+  keyToInsert :: !k,                   -- ^ what key were we looking up?
+  value       :: !(Maybe v),             -- ^ the value at this position in the map
+  nextRef     :: {-#UNPACK#-} !(IORef (LMList k v)),  -- ^ the reference at which to insert
+  nextTicket  :: !(Ticket (LMList k v))  -- ^ a ticket for the old value of nextRef
 }
 
 -- | Either the value associated with a key, or else a token at the position
@@ -70,14 +70,14 @@ find m k = findInner m Nothing
   where 
     findInner m v = do
       nextTicket <- readForCAS m
-      let stopHere = NotFound $ Token {keyToInsert = k, value = v, nextRef = m, nextTicket}
+      let stopHere = NotFound $! Token {keyToInsert = k, value = v, nextRef = m, nextTicket}
       case peekTicket nextTicket of
-        Empty -> return stopHere
+        Empty -> return $! stopHere
         Node k' v' next -> 
           case compare k k' of
-            LT -> return stopHere
-            EQ -> return $ Found v'
-            GT -> findInner next (Just v')
+            LT -> return $! stopHere
+            EQ -> return $! Found $! v'
+            GT -> findInner next $! Just $! v'
       
 -- | Attempt to insert a key/value pair at the given location (where the key is
 -- given by the token).  NB: tryInsert will *always* fail after the first attempt.
@@ -85,9 +85,9 @@ find m k = findInner m Nothing
 {-# INLINE tryInsert #-}            
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
 tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
-  newRef <- newIORef $ peekTicket nextTicket
-  (success, _) <- casIORef nextRef nextTicket $ Node keyToInsert v newRef
-  return $ if success then Just nextRef else Nothing
+  newRef <- newIORef $! peekTicket nextTicket
+  (success, _) <- casIORef nextRef nextTicket $! Node keyToInsert v newRef
+  return $! if success then Just $! nextRef else Nothing
 
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
@@ -112,23 +112,24 @@ map :: MonadIO m => (a -> b) -> LMap k a -> m (LMap k b)
 map fn mp = do 
  tmp <- foldlWithKey liftIO
                      (\ acc k v -> do
-                      r <- liftIO (newIORef acc)
+                      r <- liftIO (newIORef $! acc)
                       return$! Node k (fn v) r)
                      Empty mp
- tmp' <- liftIO (newIORef tmp)
+ tmp' <- liftIO (newIORef $! tmp)
  -- Here we suffer a reverse to avoid blowing the stack. 
  reverse tmp'
 
 -- | Create a new linked map that is the reverse order from the input.
 reverse :: MonadIO m => LMap k v -> m (LMap k v)
-reverse mp = liftIO . newIORef =<< loop Empty mp
+reverse mp = do x <- loop Empty mp
+                liftIO (newIORef $! x)
   where
     loop !acc mp = do
       n <- liftIO$ readIORef mp
       case n of
         Empty -> return acc
         Node k v next -> do
-          r <- liftIO (newIORef acc)
+          r <- liftIO (newIORef $! acc)
           loop (Node k v r) next
 
 head :: LMap k v -> IO (Maybe k)
@@ -154,10 +155,10 @@ fromList ls = do
   let loop [] = return Empty
       loop ((k,v):tl) = do
         tl' <- loop tl
-        ref <- newIORef tl'
+        ref <- newIORef $! tl'
         return $! Node k v ref
   lm <- loop ls
-  newIORef lm
+  newIORef $! lm
 
 
 halve' :: Ord k => Maybe k -> LMap k v -> IO (Maybe (LMap k v, LMap k v))
@@ -169,7 +170,7 @@ halve' mend lm = do
     Just (len1,_len2,tailhd) -> do
       ls <- toList lm
       l' <- fromList (take len1 ls)
-      r' <- newIORef tailhd
+      r' <- newIORef $! tailhd
       return $! Just $! (l',r')
           
 

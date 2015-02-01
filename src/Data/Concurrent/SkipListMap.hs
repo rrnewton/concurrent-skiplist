@@ -61,19 +61,20 @@ import qualified Data.Concurrent.Map.Class as C
 -- | The GADT representation.  The type @t@ gives the type of nodes at a given
 -- level in the skip list.
 data SLMap_ k v t where
-  Bottom :: LM.LMap k v                      -> SLMap_ k v (LM.LMap k v)
-  Index  :: LM.LMap k (t, v) -> SLMap_ k v t -> SLMap_ k v (LM.LMap k (t, v))
+  Bottom :: !(LM.LMap k v)                         -> SLMap_ k v (LM.LMap k v)
+  Index  :: !(LM.LMap k (t, v)) -> !(SLMap_ k v t) -> SLMap_ k v (LM.LMap k (t, v))
 
 -- The complete multi-level SLMap always keeps a pointer to the bottom level (the
 -- second field).
-data SLMap k v = forall t. SLMap (SLMap_ k v t) (LM.LMap k v)
+data SLMap k v = forall t. SLMap !(SLMap_ k v t)
+                  {-# UNPACK #-} !(LM.LMap k v)
 
 -- | A portion of an SLMap between two keys.  If the upper-bound is missing, that
 --   means "go to the end".  The optional lower bound is used to "lazily" prune the
 --   fronts each layer.  The reason for this is that we don't want to reallocate an
 --   IORef spine and prematurely prune all lower layers IF we're simply going to
 --   split again before actually enumerating the contents.
-data SLMapSlice k v = Slice (SLMap k v)
+data SLMapSlice k v = Slice {-# UNPACK #-} !(SLMap k v)
                       !(Maybe k) -- Lower bound.  
                       !(Maybe k) -- Upper bound.
 
@@ -305,7 +306,7 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
           -- We don't really want to allocate just for slicing... but alas we need new 
           -- IORef boxes here.  We lazily prune the head of the lower levels, but we
           -- don't want to throw away the work we've done traversing to this point in "loop":
-          tlboxed <- newIORef tlseg
+          tlboxed <- newIORef $! tlseg
           tmp <- fmap length $ LM.toList tlboxed          
           let (LM.Node tlhead _ _) = tlseg
               rmap   = mkRight tlboxed 
@@ -405,3 +406,5 @@ instance C.ConcurrentInsertMap SLMap where
 
   {-# INLINABLE lookup #-}
   lookup = find
+
+  -- TODO: estimate size
