@@ -82,35 +82,35 @@ instance Eq (SLMap k v) where
 newSLMap :: Int -> IO (SLMap k v)
 newSLMap 0 = do
   lm <- LM.newLMap
-  return $ SLMap (Bottom lm) lm
+  return $! SLMap (Bottom lm) lm
 newSLMap n = do 
   SLMap slm lmBottom <- newSLMap (n-1)
   lm <- LM.newLMap
-  return $ SLMap (Index lm slm) lmBottom
+  return $! SLMap (Index lm slm) lmBottom
 
 -- | Attempt to locate a key in the map.
 find :: Ord k => SLMap k v -> k -> IO (Maybe v)      
-find (SLMap slm _) k = find_ slm Nothing k
+find !(SLMap slm _) !k = find_ slm Nothing k
 
 -- Helper for @find@.
 find_ :: Ord k => SLMap_ k v t -> Maybe t -> k -> IO (Maybe v)
 
 -- At the bottom level: just lift the find from LinkedMap
-find_ (Bottom m) shortcut k = do
+find_ (Bottom m) !shortcut !k = do
   searchResult <- LM.find (fromMaybe m shortcut) k
   case searchResult of
-    LM.Found v       -> return $ Just v
+    LM.Found v       -> return $! Just $! v
     LM.NotFound _tok -> return Nothing
     
 -- At an indexing level: attempt to use the index to shortcut into the level
 -- below.  
-find_ (Index m slm) shortcut k = do 
+find_ (Index m slm) !shortcut !k = do 
   searchResult <- LM.find (fromMaybe m shortcut) k
   case searchResult of 
     LM.Found (_, v) -> 
-      return $ Just v   -- the key is in the index itself; we're outta here
+      return $! Just $! v   -- the key is in the index itself; we're outta here
     LM.NotFound tok -> case LM.value tok of
-      Just (m', _) -> find_ slm (Just m') k     -- there's an index node
+      Just (m', _) -> find_ slm (Just $! m') k     -- there's an index node
                                                 -- preceeding our key; use it to
                                                 -- shortcut into the level below.
       
@@ -118,7 +118,7 @@ find_ (Index m slm) shortcut k = do
                                                 -- so start at the beginning of
                                                 -- the level below.
       
-data PutResult v = Added v | Found v
+data PutResult v = Added !v | Found !v
 
 -- {-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> Par e s v -> Par e s (PutResult v)  #-}
 {-# INLINABLE putIfAbsent_ #-}
@@ -130,7 +130,7 @@ putIfAbsent :: (Ord k, MonadIO m, MonadToss m) =>
                -> k              -- ^ The key to lookup/insert
                -> m v            -- ^ A computation of the value to insert
                -> m (PutResult v)
-putIfAbsent (SLMap slm _) k vc = 
+putIfAbsent !(SLMap slm _) !k !vc = 
   putIfAbsent_ slm Nothing k vc toss $ \_ _ -> return ()
 
 
@@ -144,7 +144,7 @@ putIfAbsentToss :: (Ord k, MonadIO m) =>  SLMap k v -- ^ The map
                 -> m v           -- ^ A computation of the value to insert
                 -> m Bool        -- ^ An explicit, thread-local coin to toss
                 -> m (PutResult v)
-putIfAbsentToss (SLMap slm _) k vc coin = 
+putIfAbsentToss !(SLMap slm _) !k !vc !coin = 
   putIfAbsent_ slm Nothing k vc coin $ \_ _ -> return () 
                                                
 -- Helper for putIfAbsent
@@ -160,39 +160,39 @@ putIfAbsent_ :: (Ord k, MonadIO m) =>
                 
 -- At the bottom level, we use a retry loop around the find/tryInsert functions
 -- provided by LinkedMap
-putIfAbsent_ (Bottom m) shortcut k vc0 _coin install = retryLoop vc0 where 
+putIfAbsent_ !(Bottom m) !shortcut !k !vc0 !_coin !install = retryLoop vc0 where 
   -- The retry loop; ensures that vc is only executed once
   retryLoop vc = do
     searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
     case searchResult of
-      LM.Found v      -> return $ Found v
+      LM.Found v      -> return $! Found v
       LM.NotFound tok -> do
         v <- vc
         maybeMap <- liftIO $ LM.tryInsert tok v
         case maybeMap of
-          Just m' -> do
+          Just !m' -> do
             install m' v                  -- all set on the bottom level, now try indices
-            return $ Added v
-          Nothing -> retryLoop $ return v -- next time around, remember the value to insert
+            return $! Added v
+          Nothing -> retryLoop $! return v -- next time around, remember the value to insert
           
 -- At an index level; try to shortcut into the level below, while remembering
 -- where we were so that we can insert index nodes later on
-putIfAbsent_ (Index m slm) shortcut k vc coin install = do          
-  searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
+putIfAbsent_ !(Index m slm) !shortcut !k !vc !coin !install = do          
+  searchResult <- liftIO (LM.find (fromMaybe m shortcut) k)
   case searchResult of 
-    LM.Found (_, v) -> return $ Found v -- key is in the index; bail out
+    LM.Found (_, v) -> return $! Found v -- key is in the index; bail out
     LM.NotFound tok -> 
       let install' mBelow v = do        -- to add an index node here,
             shouldAdd <- coin           -- first, see if we (probabilistically) should
             when shouldAdd $ do 
-              maybeHere <- liftIO $ LM.tryInsert tok (mBelow, v)  -- then, try it!
+              maybeHere <- liftIO $ LM.tryInsert tok $! (mBelow, v)  -- then, try it!
               case maybeHere of
-                Just mHere -> install mHere v  -- if we succeed, keep inserting
-                                               -- into the levels above us
+                Just !mHere -> install mHere v  -- if we succeed, keep inserting
+                                                -- into the levels above us
                               
                 Nothing -> return ()    -- otherwise, oh well; we tried.
       in case LM.value tok of
-        Just (m', _) -> putIfAbsent_ slm (Just m') k vc coin install'
+        Just (m', _) -> (putIfAbsent_ slm $! (Just $! m')) k vc coin install'
         Nothing      -> putIfAbsent_ slm Nothing   k vc coin install'
 
 -- | Concurrently fold over all key/value pairs in the map within the given

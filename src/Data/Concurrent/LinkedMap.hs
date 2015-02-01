@@ -63,13 +63,13 @@ data Token k v = Token {
 -- | Either the value associated with a key, or else a token at the position
 -- where that key should go.
 data FindResult k v =
-    Found v
-  | NotFound (Token k v)
+    Found !v
+  | NotFound !(Token k v)
 
 -- | Attempt to locate a key in the map
 {-# INLINE find #-}
 find :: Ord k => LMap k v -> k -> IO (FindResult k v)
-find (LMap m) k = findInner m Nothing 
+find (LMap !m) !k = findInner m Nothing 
   where 
     findInner m v = do
       nextTicket <- readForCAS m
@@ -87,7 +87,7 @@ find (LMap m) k = findInner m Nothing
 -- If successful, returns a (mutable!) view of the map beginning at the given key.            
 {-# INLINE tryInsert #-}            
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
-tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
+tryInsert !Token{ keyToInsert, nextRef, nextTicket } !v = do
   newRef <- newIORef $! peekTicket nextTicket
   (success, _) <- casIORef nextRef nextTicket $! Node keyToInsert v newRef
   return $ if success then Just $! (LMap nextRef) else Nothing
