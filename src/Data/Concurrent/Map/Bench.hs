@@ -42,10 +42,14 @@ mkBenchSuite name Proxy = do
       blit :: (mp Key Val) -> Int64 -> IO ()
       blit mp num = for_ 1 num $ \i -> C.insert mp i i
 
-  let sizes    = [ 10^e | e <- [0,1,2,3,4::Int]]
+  -- Temp, hack to not overstress the O(N) insert version:
+  let filt ls | name == "LMap" = filter (< 100000) ls
+              | otherwise = ls
+  
+  let sizes    = filt [ 10^e | e <- [0,1,2,3,4::Int]]
       -- We need bigger sizes in parallel.. amortize forkJoin
       parSizes :: [Int]
-      parSizes = [ 10000, 100000, 500000 ]
+      parSizes = filt [ 10000, 100000, 500000 ]
   numCap <- getNumCapabilities
 --  let splits = 8 * numCap -- OVERPARTITION
   let splits = numCap -- 1-1 thread per core

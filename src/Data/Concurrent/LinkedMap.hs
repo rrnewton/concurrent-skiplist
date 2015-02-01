@@ -1,5 +1,6 @@
 {-# LANGUAGE NamedFieldPuns, BangPatterns #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | A concurrent finite map represented as a single linked list.  
 --
@@ -17,7 +18,7 @@
 -- data structures, e.g. SkipListMap.
 
 module Data.Concurrent.LinkedMap (
-  LMap(), LMList(..),
+  LMap(..), LMList(..),
   newLMap, Token(), value, find, FindResult(..), tryInsert,
   foldlWithKey, map, reverse, head, toList, fromList, findIndex,
   
@@ -43,11 +44,13 @@ data LMList k v =
     Node k v {-# UNPACK #-} !(IORef (LMList k v))
   | Empty 
 
-type LMap k v = IORef (LMList k v)
+newtype LMap k v = LMap (IORef (LMList k v))
+  deriving (Eq)
 
 -- | Create a new concurrent map
 newLMap :: IO (LMap k v)
-newLMap = newIORef Empty
+newLMap = do !x <- newIORef Empty
+             return (LMap x)
   
 -- | A position in the map into which a key/value pair can be inserted          
 data Token k v = Token {
@@ -66,7 +69,7 @@ data FindResult k v =
 -- | Attempt to locate a key in the map
 {-# INLINE find #-}
 find :: Ord k => LMap k v -> k -> IO (FindResult k v)
-find m k = findInner m Nothing 
+find (LMap m) k = findInner m Nothing 
   where 
     findInner m v = do
       nextTicket <- readForCAS m
@@ -87,7 +90,7 @@ tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
 tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
   newRef <- newIORef $ peekTicket nextTicket
   (success, _) <- casIORef nextRef nextTicket $ Node keyToInsert v newRef
-  return $ if success then Just nextRef else Nothing
+  return $ if success then Just $! (LMap nextRef) else Nothing
 
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
@@ -96,13 +99,13 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
 -- Strict in the accumulator.  
 foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
                 (a -> k -> v -> m a) -> a -> LMap k v -> m a
-foldlWithKey liftIO f !a !m = do
+foldlWithKey liftIO f !a (LMap !m) = do
   n <- liftIO$ readIORef m
   case n of
     Empty -> return a
     Node k v next -> do
       a' <- f a k v
-      foldlWithKey liftIO f a' next
+      foldlWithKey liftIO f a' (LMap next)
 
 
 -- | Map over a snapshot of the list.  Inserts that arrive concurrently may or may
@@ -117,11 +120,13 @@ map fn mp = do
                      Empty mp
  tmp' <- liftIO (newIORef tmp)
  -- Here we suffer a reverse to avoid blowing the stack. 
- reverse tmp'
+ reverse (LMap tmp')
 
 -- | Create a new linked map that is the reverse order from the input.
 reverse :: MonadIO m => LMap k v -> m (LMap k v)
-reverse mp = liftIO . newIORef =<< loop Empty mp
+reverse (LMap mp) = liftIO (do x <- loop Empty mp
+                               r <- newIORef x
+                               return (LMap r))
   where
     loop !acc mp = do
       n <- liftIO$ readIORef mp
@@ -132,7 +137,7 @@ reverse mp = liftIO . newIORef =<< loop Empty mp
           loop (Node k v r) next
 
 head :: LMap k v -> IO (Maybe k)
-head lm = do
+head (LMap lm) = do
   x <- readIORef lm
   case x of
     Empty      -> return Nothing
@@ -140,12 +145,12 @@ head lm = do
 
 -- | Convert to a list
 toList :: LMap k v -> IO [(k,v)]
-toList lm = do
+toList (LMap lm) = do
   x <- readIORef lm
   case x of
     Empty       -> return []
     Node k v tl -> do
-      ls <- toList tl
+      ls <- toList (LMap tl)
       return $! (k,v) : ls 
 
 -- | Convert from a list.
@@ -157,20 +162,21 @@ fromList ls = do
         ref <- newIORef tl'
         return $! Node k v ref
   lm <- loop ls
-  newIORef lm
+  r  <- newIORef lm
+  return (LMap r)
 
 
 halve' :: Ord k => Maybe k -> LMap k v -> IO (Maybe (LMap k v, LMap k v))
-halve' mend lm = do 
+halve' mend (LMap lm) = do 
   lml <- readIORef lm
   res <- halve mend lml
   case res of
     Nothing -> return Nothing
     Just (len1,_len2,tailhd) -> do
-      ls <- toList lm
+      ls <- toList (LMap lm)
       l' <- fromList (take len1 ls)
       r' <- newIORef tailhd
-      return $! Just $! (l',r')
+      return $! Just $! (l', LMap r')
           
 
 -- | Attempt to split into two halves.
@@ -192,7 +198,7 @@ halve mend ls = loop 0 ls ls
        case mend of
          Just end -> k >= end
          Nothing -> False
-    emptCheck (0,l2,t) = return Nothing
+    emptCheck (0,_l2,_t) = return Nothing
     emptCheck !x       = return $! Just x
 
     loop len tort hare | isEnd hare =
@@ -220,26 +226,24 @@ findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
 findIndex ls1 ls2 =
   error "FINISHME - LinkedMap.findIndex"
 
-{-
 -- | LinkedMap can provide an instance of the generic concurrent map interface,
 --   but be warned that it has O(N) complexity on find and insert.
 instance C.ConcurrentInsertMap LMap where
   type Key LMap k = (Ord k)
 
   {-# INLINABLE new #-}
-  new = newSLMap defaultLevels
-
-  {-# INLINABLE newSized #-}
-  -- Here we base the number of index levels on the expected size:
-  newSized n = newSLMap (ceiling (logBase 2 (fromIntegral n) :: Double))
+  new = newLMap 
     
   {-# INLINABLE insert #-}
   insert mp k v = do
-    res <- putIfAbsent mp k (return v)
-    case res of
-      Added _ -> return ()
-      Found _ -> error "Could not insert into SLMap, key already present!"
+    NotFound tok <- find mp k    
+    res_ <- tryInsert tok v
+    return ()
 
   {-# INLINABLE lookup #-}
-  lookup = find
--}
+  lookup mp k = do res <- find mp k
+                   case res of
+                     Found v -> return $! Just $! v
+                     NotFound _ -> return Nothing
+                     
+
