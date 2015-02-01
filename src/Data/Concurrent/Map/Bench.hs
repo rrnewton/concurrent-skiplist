@@ -10,13 +10,14 @@ module Data.Concurrent.Map.Bench
 import Control.Exception
 import Control.Monad
 -- import Control.DeepSeq
-import Control.Concurrent (getNumCapabilities, forkOn, forkIO)
+import Control.Concurrent (getNumCapabilities, forkOn, forkIO, myThreadId)
 import Control.Concurrent.MVar
 import Control.Concurrent.Async (wait, withAsyncOn)
 import qualified Data.Concurrent.Map.Class as C
 import Data.Concurrent.LinkedMap as LM
 import Data.Concurrent.SkipListMap as SLM
 import Data.Int
+import Debug.Trace (traceEventIO)
 import System.Mem (performGC)
 --------------------------------------------------------------------------------
 
@@ -31,6 +32,7 @@ data PreBench = PreBench { name :: String
 type Key = Int64
 type Val = Int64
 
+{-# INLINE mkBenchSuite #-}
 mkBenchSuite :: forall mp . (C.ConcurrentInsertMap mp, C.Key mp Key) =>
                 String -> Proxy (mp Key Val) -> IO [PreBench]
 mkBenchSuite name Proxy = do
@@ -119,7 +121,13 @@ forkJoin num act = loop2 num []
   -- VERSION 2: The less safe version:
   loop2 0 ls = mapM_ takeMVar ls
   loop2 n ls = do mv <- newEmptyMVar
-                  _ <- forkOn (n-1) (do act' (n-1); putMVar mv ())
+                  _ <- forkOn (n-1)
+                        (do tid <- myThreadId
+                            traceEventIO$ "Worker "++show(n-1)++" starting on thread "++show tid
+                            act' (n-1)
+                            tid2 <- myThreadId
+                            traceEventIO$ "Worker "++show(n-1)++" finished, on thread "++show tid
+                            putMVar mv ())
                   loop2 (n-1) (mv:ls)
   -- Both VER 1&2 are exhibiting problems with SLMap where the different workers
   -- take VASTLY different amounts of time.  There's still >2X par speedup, but
