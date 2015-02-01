@@ -38,8 +38,9 @@ import Control.Monad.IO.Class
 import Control.Exception (assert)
 import Control.Monad.IO.Class
 import Prelude hiding (reverse, map, head)
-import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.Concurrent.Map.Class as C
+
+--------------------------------------------------------------------------------
 
 -- import Foreign.C.String (newCString, CString)
 import Foreign.C.String (CString)
@@ -48,9 +49,8 @@ import GHC.Prim (traceEvent#)
 import GHC.IO (IO(..))
 import GHC.IO.Encoding (utf8)
 import GHC.Ptr(Ptr(Ptr))
-
---------------------------------------------------------------------------------
-
+import System.IO.Unsafe (unsafePerformIO)
+  
 {-# INLINE traceit #-}
 traceit :: CString -> IO ()
 #if 1
@@ -64,10 +64,9 @@ traceit _ = return ()
 -- | Pre-allocate some tags:
 tagFind, tagInsert :: CString
 
-tagFind = unsafePerformIO (newCString utf8 "black:start_findInner")
+tagFind = unsafePerformIO (newCString utf8 "black:LMap:start_findInner")
 
-tagInsert = unsafePerformIO (newCString utf8 "black:start_insert")
-
+tagInsert = unsafePerformIO (newCString utf8 "black:LMap:start_insert")
 
 --------------------------------------------------------------------------------
 
@@ -104,7 +103,7 @@ find :: Ord k => LMap k v -> k -> IO (FindResult k v)
 find (LMap !m) !k = findInner m Nothing 
   where 
     findInner m v = do
-      traceit tagFind
+--      traceit tagFind
       nextTicket <- readForCAS m
       let stopHere = NotFound $! Token {keyToInsert = k, value = v, nextRef = m, nextTicket}
       case peekTicket nextTicket of

@@ -65,13 +65,14 @@ instance ConcurrentInsertMap IOMap3 where
 main :: IO ()
 main = do
  suite0 <- mkBenchSuite "SLMap" (Proxy:: Proxy(SLMap Int64 Int64))
+{- 
  suite1 <- mkBenchSuite "LMap"  (Proxy:: Proxy(LM.LMap Int64 Int64)) 
  suite2 <- mkBenchSuite "PureMap1" (Proxy:: Proxy(IOMap1 Int64 Int64))
  suite3 <- mkBenchSuite "PureMap2" (Proxy:: Proxy(IOMap2 Int64 Int64))
  suite4 <- mkBenchSuite "PureMap3" (Proxy:: Proxy(IOMap3 Int64 Int64))  
-
+-}
  defaultMain $ 
-  Prelude.map cvt suite0 ++
+  Prelude.map cvt suite0 {- ++
   Prelude.map cvt suite1 ++  
   Prelude.map cvt suite2 ++
   Prelude.map cvt suite3 ++
@@ -109,7 +110,8 @@ main = do
           return ()
      ]
   ]
-
+-}
+ 
 for_ :: Monad m => Int -> Int -> (Int -> m ()) -> m ()
 for_ start end _ | start > end = error "start greater than end"
 for_ start end fn = loop start

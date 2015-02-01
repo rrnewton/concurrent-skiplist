@@ -4,6 +4,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-} -- for debugging
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 {-# LANGUAGE TypeFamilies #-}
 
@@ -53,6 +56,34 @@ import qualified Data.Concurrent.Map.Class as C
 
 --------------------------------------------------------------------------------
 
+-- import Foreign.C.String (newCString, CString)
+import Foreign.C.String (CString)
+import GHC.Foreign (newCString)
+import GHC.Prim (traceEvent#)
+import GHC.IO (IO(..))
+import GHC.IO.Encoding (utf8)
+import GHC.Ptr(Ptr(Ptr))
+import System.IO.Unsafe (unsafePerformIO)
+import GHC.AssertNF (assertNF)
+
+{-# INLINE traceit #-}
+traceit :: CString -> IO ()
+#if 1
+traceit (Ptr p) =
+   IO (\s -> case traceEvent# p s of s' -> (# s', () #) )
+#else
+traceit _ = return ()
+#endif
+
+{-# NOINLINE tagFind #-}
+-- | Pre-allocate some tags:
+tagFind, tagInsert :: CString
+
+tagFind = unsafePerformIO (newCString utf8 "black:SLM:start_findInner")
+
+tagInsert = unsafePerformIO (newCString utf8 "black:SLM:start_insert")
+
+--------------------------------------------------------------------------------
 
 -- | The GADT representation.  The type @t@ gives the type of nodes at a given
 -- level in the skip list.
@@ -130,7 +161,8 @@ putIfAbsent :: (Ord k, MonadIO m, MonadToss m) =>
                -> k              -- ^ The key to lookup/insert
                -> m v            -- ^ A computation of the value to insert
                -> m (PutResult v)
-putIfAbsent !(SLMap slm _) !k !vc = 
+putIfAbsent !(SLMap slm _) !k !vc = do
+--  liftIO (assertNF slm)
   putIfAbsent_ slm Nothing k vc toss $ \_ _ -> return ()
 
 
@@ -391,10 +423,10 @@ instance C.ConcurrentInsertMap SLMap where
 
   {-# INLINABLE newSized #-}
   -- Here we base the number of index levels on the expected size:
-  newSized n = newSLMap (ceiling (logBase 2 (fromIntegral n) :: Double))
+  newSized n = newSLMap $! (ceiling (logBase 2 (fromIntegral n) :: Double))
     
   {-# INLINABLE insert #-}
-  insert mp k v = do
+  insert !mp !k !v = do
     res <- putIfAbsent mp k (return v)
     case res of
       Added _ -> return ()
