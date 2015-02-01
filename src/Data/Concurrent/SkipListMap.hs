@@ -36,9 +36,6 @@ module Data.Concurrent.SkipListMap (
   )
 where
   
-import System.Random  
-
-import Control.Applicative ((<$>))
 import Control.Monad  
 import Control.Monad.IO.Class
 import Control.Exception (assert)
@@ -48,7 +45,6 @@ import Data.Concurrent.Internal.MonadToss
 
 import Data.Maybe (fromMaybe)
 import Data.IORef
-import Data.Atomics
 import qualified Data.Concurrent.LinkedMap as LM
 import Prelude hiding (map)
 import qualified Prelude as P
@@ -103,8 +99,8 @@ find_ :: Ord k => SLMap_ k v t -> Maybe t -> k -> IO (Maybe v)
 find_ (Bottom m) shortcut k = do
   searchResult <- LM.find (fromMaybe m shortcut) k
   case searchResult of
-    LM.Found v      -> return $ Just v
-    LM.NotFound tok -> return Nothing
+    LM.Found v       -> return $ Just v
+    LM.NotFound _tok -> return Nothing
     
 -- At an indexing level: attempt to use the index to shortcut into the level
 -- below.  
@@ -164,7 +160,7 @@ putIfAbsent_ :: (Ord k, MonadIO m) =>
                 
 -- At the bottom level, we use a retry loop around the find/tryInsert functions
 -- provided by LinkedMap
-putIfAbsent_ (Bottom m) shortcut k vc coin install = retryLoop vc where 
+putIfAbsent_ (Bottom m) shortcut k vc0 _coin install = retryLoop vc0 where 
   -- The retry loop; ensures that vc is only executed once
   retryLoop vc = do
     searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
@@ -206,19 +202,19 @@ putIfAbsent_ (Index m slm) shortcut k vc coin install = do
 -- Strict in the accumulator.        
 foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
                 (a -> k -> v -> m a) -> a -> SLMap k v -> m a
-foldlWithKey liftIO f !a (SLMap _ !lm) = LM.foldlWithKey liftIO f a lm
+foldlWithKey liftio f !a (SLMap _ !lm) = LM.foldlWithKey liftio f a lm
 
 -- | Create an identical copy of an (unchanging) SLMap with the keys unchanged and
 -- the values replaced by the result of applying the provided function.
 -- map :: MonadIO m => (a -> b) -> SLMap k a -> m (SLMap k b)
-map :: MonadIO m => (a -> a) -> SLMap k a -> m (SLMap k a)
-map fn (SLMap (Bottom lm) lm2) = do
+_map :: MonadIO m => (a -> a) -> SLMap k a -> m (SLMap k a)
+_map fn (SLMap (Bottom lm) _lm2) = do
   lm'  <- LM.map fn lm
   return$! SLMap (Bottom lm') lm'
 
-map fn (SLMap (Index lm slm) lmbot) = do
-  SLMap slm2 bot2 <- map fn (SLMap slm lmbot)
-  lm2  <- LM.map (\(t,a) -> (t,fn a)) lm
+_map fn (SLMap (Index lm slm) lmbot) = do
+  SLMap _slm2 _bot2 <- _map fn (SLMap slm lmbot)
+  _lm2  <- LM.map (\(t,a) -> (t,fn a)) lm
   error "FINISHME -- SkipListMap.map"
 --  return$! SLMap (Index lm2 slm2) bot2
 
@@ -264,7 +260,7 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
   return res    
   where    
     loop :: SLMap_ k v t -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
-    loop (Bottom lm) = do
+    loop (Bottom (LM.LMap lm)) = do
       putStrLn "AT BOT"
       lm' <- readIORef lm
       lm'' <- case mstart of
@@ -277,10 +273,10 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
       
       case res of
         Nothing -> return Nothing
-        Just x -> dosplit (SLMap (Bottom lm) lm)
+        Just x -> dosplit (SLMap (Bottom (LM.LMap lm)) (LM.LMap lm))
                           (\ tlboxed -> SLMap (Bottom tlboxed) tlboxed) x
 
-    loop orig@(Index m slm) = do
+    loop orig@(Index (LM.LMap m) slm) = do
       indm <- readIORef m
       indm' <- case mstart of
                 Nothing -> return indm
@@ -307,9 +303,9 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
           -- IORef boxes here.  We lazily prune the head of the lower levels, but we
           -- don't want to throw away the work we've done traversing to this point in "loop":
           tlboxed <- newIORef $! tlseg
-          tmp <- fmap length $ LM.toList tlboxed          
+          _tmp <- fmap length $ LM.toList (LM.LMap tlboxed)
           let (LM.Node tlhead _ _) = tlseg
-              rmap   = mkRight tlboxed 
+              rmap   = mkRight (LM.LMap tlboxed )
               rslice = Slice rmap (Just tlhead) mend
               lslice = Slice lmap Nothing (Just tlhead)
           return $! Just $! (lslice, rslice)
@@ -325,7 +321,7 @@ sliceToList :: Ord k => SLMapSlice k v -> IO [(k,v)]
 sliceToList (Slice (SLMap _ lmbot) mstart mend) = do
    ls <- LM.toList lmbot
    -- We SHOULD use the index layers to shortcut to a start, then stop at the end.
-   return $! [ pr | pr@(k,v) <- ls, strtCheck k, endCheck k ] -- Inefficient!
+   return $! [ pr | pr@(k,_v) <- ls, strtCheck k, endCheck k ] -- Inefficient!
   where
     strtCheck = case mstart of
                  Just strt -> \ k -> k >= strt
@@ -338,7 +334,7 @@ sliceToList (Slice (SLMap _ lmbot) mstart mend) = do
 
 -- | Print a slice with each layer on a line.
 debugShow :: forall k v . (Ord k, Show k, Show v) => SLMapSlice k v -> IO String
-debugShow (Slice (SLMap index lmbot) mstart mend) =
+debugShow (Slice (SLMap index _lmbot) mstart mend) =
   do lns <- loop index
      let len = length lns
      return $ unlines [ "["++show i++"]  "++l | l <- lns | i <- reverse [0::Int ..len-1] ]
@@ -362,8 +358,8 @@ debugShow (Slice (SLMap index lmbot) mstart mend) =
                          ] ]
     loop (Index indm slm) = do
       ls <- LM.toList indm
-      strs <- forM [ (i,tup) | i <- [(0::Int)..] | tup@(k,_) <- ls ] $ -- , startCheck k
-              \ (ix, (key, (shortcut::t, val))) -> do
+      strs <- forM [ (i,tup) | i <- [(0::Int)..] | tup@(_k,_) <- ls ] $ -- , startCheck k
+              \ (ix, (key, (_shortcut::t, val))) -> do
         -- Peek at the next layer down:
 {-        
         case (slm::SLMap_ k v t) of
