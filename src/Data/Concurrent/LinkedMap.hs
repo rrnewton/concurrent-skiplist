@@ -31,11 +31,12 @@ module Data.Concurrent.LinkedMap (
 where
   
 import Data.IORef
+import Data.Int
 import Data.Atomics  
 --import Control.Reagent -- AT: not yet using this, but would be nice to refactor
                          -- to use it.
 import Control.Monad.IO.Class
-import Control.Exception (assert)
+import Control.Exception (assert, evaluate)
 import Control.Monad.IO.Class
 import Prelude hiding (reverse, map, head)
 import qualified Data.Concurrent.Map.Class as C
@@ -98,8 +99,11 @@ data FindResult k v =
   | NotFound !(Token k v)
 
 -- | Attempt to locate a key in the map
-{-# INLINE find #-}
 find :: Ord k => LMap k v -> k -> IO (FindResult k v)
+-- {-# NOINLINE find #-}
+-- {-# INLINE find #-}
+{-# INLINABLE find #-}
+{-# SPECIALIZE find :: LMap Int64 v -> Int64 -> IO (FindResult Int64 v) #-}
 find (LMap !m) !k = findInner m Nothing 
   where 
     findInner m v = do
@@ -117,13 +121,16 @@ find (LMap !m) !k = findInner m Nothing
 -- | Attempt to insert a key/value pair at the given location (where the key is
 -- given by the token).  NB: tryInsert will *always* fail after the first attempt.
 -- If successful, returns a (mutable!) view of the map beginning at the given key.            
-{-# INLINE tryInsert #-}            
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
-tryInsert !Token{ keyToInsert, nextRef, nextTicket } !v = do
---  traceit tagInsert
-  newRef <- newIORef $! peekTicket nextTicket
-  (success, _) <- casIORef nextRef nextTicket $! Node keyToInsert v newRef
-  return $ if success then Just $! (LMap nextRef) else Nothing
+{-# NOINLINE tryInsert #-}
+-- {-# INLINE tryInsert #-}            
+tryInsert !Token{ keyToInsert, nextRef, nextTicket } !v = 
+  -- After inlining tryInsert, GHC is FLOATING this peekTicket upwards
+  -- (outside an enclosing lambda) and then THUNKING it.  
+  case peekTicket nextTicket of
+    !pk -> do newRef       <- newIORef pk
+              (success, _) <- casIORef nextRef nextTicket $! Node keyToInsert v newRef
+              return $! if success then Just $! (LMap nextRef) else Nothing
 
 -- | Concurrently fold over all key/value pairs in the map within the given
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
@@ -259,6 +266,8 @@ findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
 findIndex ls1 ls2 =
   error "FINISHME - LinkedMap.findIndex"
 
+{-
+
 -- | LinkedMap can provide an instance of the generic concurrent map interface,
 --   but be warned that it has O(N) complexity on find and insert.
 instance C.ConcurrentInsertMap LMap where
@@ -278,5 +287,5 @@ instance C.ConcurrentInsertMap LMap where
                    case res of
                      Found v -> return $! Just $! v
                      NotFound _ -> return Nothing
-                     
 
+-}
