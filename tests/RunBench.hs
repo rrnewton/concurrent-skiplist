@@ -6,16 +6,16 @@ module Main where
 
 import Criterion.Main
 import Criterion.Types
+import Control.Concurrent (getNumCapabilities, forkOn, forkIO, myThreadId)
 import Data.Int
 import Data.IORef
 import Data.Atomics (atomicModifyIORefCAS)
+import qualified Data.Map as M
 import Data.Concurrent.LinkedMap as LM
 import Data.Concurrent.SkipListMap as SLM
 import Data.Concurrent.Map.Bench
 import Data.Concurrent.Map.Class
--- import Control.Concurrent
-
-import qualified Data.Map as M
+import System.Environment
 
 cvt :: PreBench -> Benchmark
 cvt PreBench{name,batchRunner} =
@@ -61,9 +61,39 @@ instance ConcurrentInsertMap IOMap3 where
   estimateSize (IOMap3 r) = do m <- readIORef r
                                return $! M.size m
 
-
+-- Debugging:
 main :: IO ()
 main = do
+  args <- getArgs  
+  let elems = case args of
+               []  -> 100000
+               [x] -> read x
+  numCap <- getNumCapabilities
+  let splits = numCap -- 1-1 thread per core      
+--      act = rep (void$ forkNFill elems)) | elems <- parSizes ]
+  mp <- newSLMap 8
+  let quota :: Int64
+      quota = fromIntegral (elems `quot` splits)
+{-      
+  forkJoin splits (\chunk -> do 
+                    let offset = fromIntegral (chunk * fromIntegral quota) 
+                    putStrLn ("Running loop iters "++show (offset, (offset+quota-1)))
+                    for_ offset (offset+quota-1) $
+                      \ !i -> putIfAbsent mp i (return i))
+-}
+  forkJoin splits (\ incr -> do
+                    putStrLn ("Running loop iters at offset "++show incr++", show stride "++show splits)
+                    for_ 0 (quota-1) $
+                      \ !i -> let ix = i * (fromIntegral splits) + (fromIntegral incr) in
+                              putIfAbsent mp ix (return ix))
+  return mp
+
+
+  return ()
+
+{-
+main2 :: IO ()
+main2 = do
  suite0 <- mkBenchSuite "SLMap" (Proxy:: Proxy(SLMap Int64 Int64))
 {- 
  suite1 <- mkBenchSuite "LMap"  (Proxy:: Proxy(LM.LMap Int64 Int64)) 
@@ -112,9 +142,4 @@ main = do
   ]
 -}
  
-for_ :: Monad m => Int -> Int -> (Int -> m ()) -> m ()
-for_ start end _ | start > end = error "start greater than end"
-for_ start end fn = loop start
-  where loop !i | i > end = return ()
-                | otherwise = fn i >> loop (i+1)
-{-# INLINE for_ #-}
+-}

@@ -120,7 +120,7 @@ find (LMap !m) !k = findInner m Nothing
 {-# INLINE tryInsert #-}            
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
 tryInsert !Token{ keyToInsert, nextRef, nextTicket } !v = do
-  traceit tagInsert
+--  traceit tagInsert
   newRef <- newIORef $! peekTicket nextTicket
   (success, _) <- casIORef nextRef nextTicket $! Node keyToInsert v newRef
   return $ if success then Just $! (LMap nextRef) else Nothing

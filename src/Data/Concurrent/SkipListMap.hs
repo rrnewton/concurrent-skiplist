@@ -152,7 +152,17 @@ find_ (Index m slm) !shortcut !k = do
 data PutResult v = Added !v | Found !v
 
 -- {-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> Par e s v -> Par e s (PutResult v)  #-}
+{-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> IO v -> IO (PutResult v) #-}
 {-# INLINABLE putIfAbsent_ #-}
+{-# SPECIALIZE 
+    putIfAbsent_ :: (Ord k) => SLMap_ k v t 
+                -> Maybe t     
+                -> k           
+                -> IO v         
+                -> IO Bool      
+                -> (t -> v -> IO ())
+                -> IO (PutResult v)
+ #-}
 
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
@@ -413,6 +423,7 @@ debugShow (Slice (SLMap index _lmbot) mstart mend) =
 defaultLevels :: Int
 defaultLevels = 8
 
+{-
 -- | SLMap's can provide an instance of the generic concurrent map interface.
 instance C.ConcurrentInsertMap SLMap where
   type Key SLMap k = (Ord k)
@@ -436,3 +447,4 @@ instance C.ConcurrentInsertMap SLMap where
   lookup = find
 
   -- TODO: estimate size
+-}

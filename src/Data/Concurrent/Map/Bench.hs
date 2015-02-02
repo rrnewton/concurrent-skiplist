@@ -4,7 +4,8 @@
 -- | A module providing a common benchmark suite for mutable concurrent maps.
 
 module Data.Concurrent.Map.Bench
-       (PreBench(..), mkBenchSuite, Proxy(..))
+       (PreBench(..), mkBenchSuite, Proxy(..),
+        forkJoin, rep, for_)
        where
 
 import Control.Exception
@@ -68,7 +69,7 @@ mkBenchSuite name Proxy = do
                           let offset = fromIntegral (chunk * fromIntegral quota) 
                           putStrLn ("Running loop iters "++show (offset, (offset+quota-1)))
                           for_ offset (offset+quota-1) $
-                            \i -> C.insert mp i i)
+                            \ !i -> C.insert mp i i)
         return mp
   
   return $
@@ -104,13 +105,19 @@ mkBenchSuite name Proxy = do
 makeNfillN = do
   undefined
 
+-- Just getting all the code in one place for debugging:
+{-# NOINLINE forkJoin #-}   
 -- | Run N copies of an IO action in parallel.  Pass in a number from
 -- 0..N-1, letting the worker know which it is.
 forkJoin :: Int -> (Int -> IO ()) -> IO ()
 forkJoin num act = loop2 num []
  where
-  act' n = do putStrLn $ "Start action "++show n++" of "++show num
+  act' n = do tid <- myThreadId
+              traceEventIO$ "Worker "++show n++" starting on thread "++show tid
+              putStrLn $ "Start action "++show n++" of "++show num
               act n
+              tid2 <- myThreadId
+              traceEventIO$ "Worker "++show n++" finished, on thread "++show tid
               putStrLn $ "End action "++show n++" of "++show num
 
   -- VERSION 1: This strategy makes things exception safe:
@@ -121,13 +128,7 @@ forkJoin num act = loop2 num []
   -- VERSION 2: The less safe version:
   loop2 0 ls = mapM_ takeMVar ls
   loop2 n ls = do mv <- newEmptyMVar
-                  _ <- forkOn (n-1)
-                        (do tid <- myThreadId
-                            traceEventIO$ "Worker "++show(n-1)++" starting on thread "++show tid
-                            act' (n-1)
-                            tid2 <- myThreadId
-                            traceEventIO$ "Worker "++show(n-1)++" finished, on thread "++show tid
-                            putMVar mv ())
+                  _ <- forkOn (n-1) (do act' (n-1); putMVar mv ())
                   loop2 (n-1) (mv:ls)
   -- Both VER 1&2 are exhibiting problems with SLMap where the different workers
   -- take VASTLY different amounts of time.  There's still >2X par speedup, but
