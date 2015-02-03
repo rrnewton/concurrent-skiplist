@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-PKGS=" ./concurrent-skiplist"
+# PKGS=" ./concurrent-skiplist"
 
 # ========================================
 # Generic GHC package testing setup:
@@ -32,11 +32,13 @@ fi
 TOP=`pwd`
 $CABAL sandbox init
 $CABAL sandbox hc-pkg list
-for path in $PKGS; do 
-  cd $TOP/$path
-  $CABAL sandbox init --sandbox=$TOP/.cabal-sandbox
-done
-cd $TOP
+
+# # No packages deeper in the repo curretnly:
+# for path in $PKGS; do 
+#   cd $TOP/$path
+#   $CABAL sandbox init --sandbox=$TOP/.cabal-sandbox
+# done
+# cd $TOP
 
 CFG=" --force-reinstalls "
 
