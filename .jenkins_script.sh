@@ -1,8 +1,5 @@
 #!/bin/bash
 
-
-# PKGS=" ./concurrent-skiplist"
-
 # ========================================
 # Generic GHC package testing setup:
 # ========================================
@@ -14,7 +11,9 @@ set -e
 set -x
 
 # Temporarily staying off of 1.20 due to cabal issue #1811:
-CABAL=cabal-1.18.0
+# CABAL=cabal-1.18.0
+# Fixed now [2015.05.03]:
+CABAL=cabal-1.22
 SHOWDETAILS=always
 # SHOWDETAILS=streaming
 
@@ -43,15 +42,16 @@ $CABAL sandbox hc-pkg list
 CFG=" --force-reinstalls "
 
 if [ "$PROF" == "" ] || [ "$PROF" == "0" ]; then 
-  CFG="$CFG --disable-library-profiling --disable-executable-profiling"
+  CFG="$CFG --disable-library-profiling "
+# --disable-executable-profiling
 else
   CFG="$CFG --enable-library-profiling --enable-executable-profiling"
 fi  
 
 # Install dependencies in parallel, including those needed for testing:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS --enable-tests --only-dep $*
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC --enable-tests --only-dep $*
 # Install the packages WITHOUT testing:
-$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $PKGS  $*
+$CABAL install $CFG $CABAL_FLAGS --with-ghc=$GHC $*
 
 
 GHC_VER=`$GHC --version | egrep -o '[0123456789]+\.[0123456789]+\.[0123456789]+'`
@@ -64,10 +64,8 @@ if [ `uname` == "Linux" ] && [ "$OLDVER" == 1 ] ;
 then  
   echo "Skipping tests!"
 else
-  for path in $PKGS; do 
-    echo "Test package in path $path."
-    cd $TOP/$path
-    # Assume cabal 1.20+:
-    cabal test --show-details=$SHOWDETAILS
-  done
+  echo "Testing packages."
+  cd $TOP/$path
+  # Assume cabal 1.20+:
+  cabal test --show-details=$SHOWDETAILS
 fi
