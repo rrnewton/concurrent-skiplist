@@ -67,5 +67,5 @@ else
   echo "Testing packages."
   cd $TOP/$path
   # Assume cabal 1.20+:
-  cabal test --show-details=$SHOWDETAILS
+  $CABAL test --show-details=$SHOWDETAILS
 fi
