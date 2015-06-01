@@ -9,21 +9,25 @@
 module Main where
 -- module SkipListTests where
 
-import Test.Framework.Providers.HUnit 
-import Test.Framework (Test, defaultMain, testGroup)
+import Test.Tasty.Runners
+import Test.Tasty.HUnit 
+import Test.Tasty (TestTree, defaultMain, testGroup)
 -- [2013.09.26] Temporarily disabling template haskell due to GHC bug discussed here:
 --   https://github.com/rrnewton/haskell-lockfree/issues/10
-import Test.Framework.TH (testGroupGenerator)
+import Test.Tasty.TH (testGroupGenerator)
 
-import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
+-- import Test.HUnit (Assertion, assertEqual, assertBool, Counts(..))
 import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.Async (async, wait)
 import GHC.Conc
 
+import Data.Time.Clock -- TestHelper
 import Data.Word
 import Data.IORef
 import System.Random (random, mkStdGen)
+import System.IO.Unsafe (unsafePerformIO) -- TestHelper
+import System.Environment (withArgs, getArgs, getEnvironment) -- TestHelper
 
 -- import Control.LVish.SchedIdempotent (dbgLvl, forkWithExceptions)
 
@@ -38,7 +42,7 @@ import TestHelpers as T
 logDbgLn_ _ _ = return ()
 
 --------------------------------------------------------------------------------
--- Parameters and helpers
+-- Parameteirs and helpers
 --------------------------------------------------------------------------------
 
 -- A number of insertions to test that is reasonable.
@@ -201,13 +205,12 @@ case_slm4 :: Assertion
 case_slm4 = slm4 >>= assertEqual "test concurrent insertion for SkipListMap (#4)" (True, expectedSum)
 
 
---------------------------------------------------------------------------------
-
-tests :: Test
+tests :: TestTree
 tests = $(testGroupGenerator)
 
 runTests :: IO ()
-runTests = defaultMainSeqTests [tests]
+-- runTests = defaultMainWithIngredients [consoleTestReporter] tests
+runTests = defaultMain tests
 
 main = runTests
 

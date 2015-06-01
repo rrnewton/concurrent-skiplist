@@ -8,7 +8,7 @@ module TestHelpers
    numElems, getNumAgents, producerRatio,
 
    -- * A replacement for defaultMain that uses a 1-thread worker pool
-   defaultMainSeqTests,
+   -- defaultMainSeqTests,
 
    -- * Misc utilities
    nTimes, for_, forDown_, assertOr, timeOut, assertNoTimeOut, splitRange, timeit,
@@ -37,12 +37,12 @@ import System.IO (hFlush, stdout, stderr, hPutStrLn)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Mem (performGC)
 import System.Exit
-import qualified Test.Framework as TF
+--import qualified Test.Framework as TF
 
 import Data.Monoid (mappend, mempty)
-import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
-import Test.Framework.Runners.Options (RunnerOptions'(..))
-import Test.Framework.Options (TestOptions'(..))
+--import Test.Framework.Runners.Console (interpretArgs, defaultMainWithOpts)
+--import Test.Framework.Runners.Options (RunnerOptions'(..))
+--import Test.Framework.Options (TestOptions'(..))
 import Test.HUnit as HU
 
 import Debug.Trace (trace)
@@ -297,6 +297,7 @@ timeit ioact = do
 
 -- | An alternate version of `defaultMain` which sets the number of test running
 --   threads to one by default, unless the user explicitly overrules it with "-j".
+{-
 defaultMainSeqTests :: [TF.Test] -> IO ()
 defaultMainSeqTests tests = do
   putStrLn " [*] Default test harness..."
@@ -319,7 +320,7 @@ defaultMainSeqTests tests = do
        threadDelay (30 * 1000)
        putStrLn " [*] Main thread exiting."
        exitWith e
-
+-}
 -- | In nanoseconds.
 defaultTestTimeout :: Int
 -- defaultTestTimeout = 3*1000*1000
