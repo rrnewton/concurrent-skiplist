@@ -4,4 +4,3 @@ dist/
 
 # Ignore Criterion reports
 *.crit
-dist
