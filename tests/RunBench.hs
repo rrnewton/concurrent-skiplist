@@ -14,7 +14,7 @@ import qualified Data.Map as M
 import Data.Concurrent.LinkedMap as LM
 import Data.Concurrent.SkipListMap as SLM
 import Data.Concurrent.Map.Bench
-import Data.Concurrent.Map.Class
+import Data.Concurrent.Map.Class as C
 import System.Environment
 
 cvt :: PreBench -> Benchmark
@@ -49,7 +49,7 @@ instance ConcurrentInsertMap IOMap2 where
                                return $! M.size m
 
 
--- This version tries the speculative replacement for atomicModifyIORefCAS:
+-- This version tries the speculative replacement, atomicModifyIORef:
 newtype IOMap3 k v = IOMap3 (IORef (M.Map k v))
 instance ConcurrentInsertMap IOMap3 where
   type Key IOMap3 k = Ord k
@@ -71,24 +71,36 @@ main = do
   numCap <- getNumCapabilities
   let splits = numCap -- 1-1 thread per core      
 --      act = rep (void$ forkNFill elems)) | elems <- parSizes ]
-  mp <- newSLMap 8
   let quota :: Int64
       quota = fromIntegral (elems `quot` splits)
-{-      
+{-
+  -- Version 1: take contiguous chunks of iteration space:
+  mp <- newSLMap 8
   forkJoin splits (\chunk -> do 
                     let offset = fromIntegral (chunk * fromIntegral quota) 
                     putStrLn ("Running loop iters "++show (offset, (offset+quota-1)))
                     for_ offset (offset+quota-1) $
                       \ !i -> putIfAbsent mp i (return i))
 -}
+{-
+  -- Version 2: interleaved
+  mp <- newSLMap 8
   forkJoin splits (\ incr -> do
                     putStrLn ("Running loop iters at offset "++show incr++", show stride "++show splits)
                     for_ 0 (quota-1) $
                       \ !i -> let ix = i * (fromIntegral splits) + (fromIntegral incr) in
                               putIfAbsent mp ix (return ix))
   return mp
-
-
+-}
+--  putStrLn "Benchmarking pure-in-a-box version, speculative CAS."
+--  mp <- C.new :: IO (IOMap3 Int64 Int64)
+  putStrLn "Benchmarking pure-in-a-box version, WHNF atomicModifyIORef'."      
+  mp <- C.new :: IO (IOMap2 Int64 Int64)  
+  forkJoin splits (\ incr -> do
+                    putStrLn ("Running loop iters at offset "++show incr++", show stride "++show splits)
+                    for_ 0 (quota-1) $
+                      \ !i -> let ix = i * (fromIntegral splits) + (fromIntegral incr) in
+                              C.insert mp ix ix)
   return ()
 
 {-
