@@ -25,19 +25,23 @@ data Proxy a = Proxy
 -- | To avoid a dependence on Criterion, we deal in this simple
 -- datatype which can easily be turned into a benchmark.
 data PreBench = PreBench { name :: String
-                         , batchRunner :: Int64 -> IO () }
+                         , batchRunner :: Int64 -> IO ()
+                           -- ^ Argument to batch runner is the number of iterations of the benchmark to run.
+                           -- The benchmark workload itself is fixed.
+                         }
 
 -- Hard coding these for now:
 type Key = Int64
 type Val = Int64
 
+-- | Create a suite of benchmarks for the given map datatype.
 mkBenchSuite :: forall mp . (C.ConcurrentInsertMap mp, C.Key mp Key) =>
                 String -> Proxy (mp Key Val) -> IO [PreBench]
 mkBenchSuite name Proxy = do
   let fillN :: Int64 -> IO (mp Key Val)
       fillN num = do
         mp <- C.new
-        blit mp num 
+        blit mp num
         return mp
       blit :: (mp Key Val) -> Int64 -> IO ()
       blit mp num = for_ 1 num $ \i -> C.insert mp i i
@@ -45,7 +49,7 @@ mkBenchSuite name Proxy = do
   -- Temp, hack to not overstress the O(N) insert version:
   let filt ls | name == "LMap" = filter (< 100000) ls
               | otherwise = ls
-  
+
   let sizes    = filt [ 10^e | e <- [0,1,2,3,4::Int]]
       -- We need bigger sizes in parallel.. amortize forkJoin
       parSizes :: [Int]
@@ -62,17 +66,17 @@ mkBenchSuite name Proxy = do
         mp <- C.new :: IO (mp Key Val)
         let quota :: Int64
             quota = fromIntegral (elems `quot` splits)
-        forkJoin splits (\chunk -> do 
-                          let offset = fromIntegral (chunk * fromIntegral quota) 
+        forkJoin splits (\chunk -> do
+                          let offset = fromIntegral (chunk * fromIntegral quota)
                           putStrLn ("Running loop iters "++show (offset, (offset+quota-1)))
                           for_ offset (offset+quota-1) $
                             \i -> C.insert mp i i)
         return mp
-  
+
   return $
     [ PreBench (name++"/new") (rep (C.new :: IO (mp Key Val))) ] ++
     [ PreBench (name++"/insert-"++show n) (rep (fillN n))
-    | n <- sizes ] ++ 
+    | n <- sizes ] ++
 
     -- Parallel benchmarks:
     [ PreBench (name++"/parBarrier-insert+size"++show elems)
@@ -84,17 +88,17 @@ mkBenchSuite name Proxy = do
                return ()
                ))
     | elems <- parSizes ] ++
-    
+
     [ PreBench (name++"/parBarrier-insert"++show elems)
       (rep (void$ forkNFill elems)) | elems <- parSizes ]
-    
+
 
     -- Here we instead elide the barriers and pre-allocate the
     -- structures we will operate on.  We thus allow different
     -- criterion iterations to actually overlap in real time.  This
     -- models performance inside an application with abundant
     -- parallelism.
-    
+
 
 
 -- | Prebuild N empty copies of a structure so we can communicate
@@ -113,7 +117,7 @@ forkJoin num act = loop2 num []
 
   -- VERSION 1: This strategy makes things exception safe:
   loop 0 ls = mapM_ wait ls
-  loop n ls = withAsyncOn (n-1) (act' (n-1)) $ \ asnc ->                  
+  loop n ls = withAsyncOn (n-1) (act' (n-1)) $ \ asnc ->
                loop (n-1) (asnc:ls)
 
   -- VERSION 2: The less safe version:
@@ -133,7 +137,7 @@ forkJoin num act = loop2 num []
                   loop3 (n-1) (mv:ls)
 
 
-{- 
+{-
 main :: IO ()
 main = defaultMain [
   bgroup "linkedMap" [
@@ -166,7 +170,7 @@ main = defaultMain [
           return ()
      ]
   ]
--} 
+-}
 
 
 rep :: Monad m => m a -> Int64 -> m ()
