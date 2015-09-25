@@ -4,8 +4,7 @@
 -- NOTE: currently this is just a very tiny core of the Reagent design.  Needs
 -- lots of work.
 
-module Data.Concurrent.Internal
-where
+module Data.Concurrent.Internal.Reagent where
   
 import Data.IORef  
 import Data.Atomics

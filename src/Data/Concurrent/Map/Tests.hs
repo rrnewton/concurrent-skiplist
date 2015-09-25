@@ -13,8 +13,8 @@ module Data.Concurrent.Map.Tests
 
 import Data.Concurrent.Map.Class as C
 
-import qualified Test.Framework as TF
-import           Test.Framework.Providers.HUnit  (testCase, hUnitTestToTests)
+import qualified Test.Tasty as TST
+import           Test.Tasty.HUnit  (testCase)
 import           Test.HUnit as HU
 import Prelude hiding (lookup)
 --------------------------------------------------------------------------------
@@ -24,10 +24,10 @@ data Phantom (a :: * -> * -> *) = Phantom
 -- | Build a series of tests that exercise a concurrent map, without assuming deletion capability
 makeConcurrentInsertMapTests :: forall (mp :: * -> * -> *) .
                                 (ConcurrentInsertMap mp, Key mp Int, Key mp String) =>
-                                Phantom mp -> [TF.Test]
+                                Phantom mp -> TST.TestTree
 makeConcurrentInsertMapTests (p :: Phantom mp)  =
-  [ testCase "test1" (test1 p)
-  ]
+  testCase "test1" (test1 p)
+  
 
 
 test1 :: forall mp . (ConcurrentInsertMap mp, Key mp Int) =>

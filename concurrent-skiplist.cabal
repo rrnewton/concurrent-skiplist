@@ -7,7 +7,7 @@ version:             0.1.0.0
 -- description:
 license:             Apache-2.0
 license-file:        LICENSE
-author:              Ryan Newton
+author:              Aaron Turon, Ryan Newton
 maintainer:          rrnewton@gmail.com
 -- copyright:
 category:            Data
@@ -25,20 +25,23 @@ library
                      Data.Concurrent.Map.Tests
                      Data.Concurrent.Map.Bench
 
+                     -- Need to be exported for lvish
                      Data.Concurrent.Internal.MonadToss
+                     Data.Concurrent.Internal.Reagent
 
   other-extensions:  NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs,
                      ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
-  build-depends:  base   >=4.6,
-                  random >=1.0,
+  build-depends:  base   >=4.6 && <4.9,
+                  random >=1.0 && <1.2,
                   ghc-prim >= 0.3,
-                  transformers >=0.3 && <0.4,
-                  atomic-primops >=0.7,
+                  transformers >=0.3 && <0.5,
+                  atomic-primops >=0.7 && < 0.9,
                   async >= 2.0 && < 2.1,
                   vector >= 0.10
 
   -- For building test-suites.  This could go in a separate package:
-  build-depends: HUnit, test-framework, test-framework-hunit
+  build-depends: HUnit, tasty, tasty-hunit
+
   ghc-options:  -O2
   default-language:    Haskell2010
 
@@ -55,11 +58,11 @@ test-suite test-concurrent-skiplist
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
 
     build-depends: concurrent-skiplist
-    build-depends: base    >= 4.6 && <= 4.8,
+    build-depends: base    >= 4.6 && < 4.9,
                    random >= 1.0,
                    async
-    build-depends: test-framework, test-framework-hunit, test-framework-th,
-                   test-framework-quickcheck2, QuickCheck,
+    build-depends: tasty, tasty-hunit, tasty-th,
+                   tasty-quickcheck, QuickCheck,
                    HUnit, time, text
     default-language:    Haskell2010
     -- Atomic-primops fails when used by template-haskell/ghci on linux:
@@ -74,11 +77,11 @@ test-suite test-concurrent-skiplist2
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
 
     build-depends: concurrent-skiplist
-    build-depends: base    >= 4.6 && <= 4.8,
+    build-depends: base    >= 4.6 && < 4.9,
                    random >= 1.0,
                    async
-    build-depends: test-framework, test-framework-hunit, test-framework-th,
-                   test-framework-quickcheck2, QuickCheck,
+    build-depends: tasty, tasty-hunit, tasty-th,
+                   tasty-quickcheck, QuickCheck,
                    HUnit, time, text
     default-language:    Haskell2010
     -- Atomic-primops fails when used by template-haskell/ghci on linux:
@@ -92,10 +95,10 @@ benchmark bench-concurrent-skiplist
     hs-source-dirs: tests/
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
     build-depends: concurrent-skiplist
-    build-depends: base >= 4.6 && <= 4.8,
+    build-depends: base >= 4.6 && < 4.9,
                    criterion >= 1.0,
                    containers >= 0.5,
-                   atomic-primops >=0.7
+                   atomic-primops >=0.7 && < 0.9
     default-language:    Haskell2010
 
     -- Debugging:
