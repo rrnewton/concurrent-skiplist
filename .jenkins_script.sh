@@ -18,4 +18,5 @@ else
   CFG="$CFG --library-profiling --executable-profiling"
 fi
 
+$STACK setup
 $STACK test $CFG
