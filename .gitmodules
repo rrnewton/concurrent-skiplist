@@ -1,0 +1,3 @@
+[submodule "pcg-random"]
+	path = pcg-random
+	url = git@github.com:rrnewton/pcg-random.git
