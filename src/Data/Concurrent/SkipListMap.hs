@@ -25,21 +25,21 @@
 -- nodes can be added *afterward* in a best-effort style (i.e., if there is
 -- contention to add them, we can simply walk away, with the effect that the
 -- probability of appearing in an index is partly a function of contention.)
--- 
+--
 -- To implement skip lists in Haskell, we use a GADT to represent the layers,
 -- each of which has a different type (since it indexes the layer below it).
 
 module Data.Concurrent.SkipListMap (
   SLMap(), newSLMap, find, PutResult(..), putIfAbsent, putIfAbsentToss, foldlWithKey, counts,
   -- map: is not exposed, because it has that FINISHME for now... [2013.10.01]
-  debugShow, 
+  debugShow,
 
   -- * Slicing SLMaps
   SLMapSlice(Slice), toSlice, splitSlice, sliceSize
   )
 where
-  
-import Control.Monad  
+
+import Control.Monad
 import Control.Monad.IO.Class
 import Control.Exception (assert)
 import Data.Concurrent.Internal.MonadToss
@@ -102,7 +102,7 @@ data SLMap k v = forall t. SLMap !(SLMap_ k v t)
 --   IORef spine and prematurely prune all lower layers IF we're simply going to
 --   split again before actually enumerating the contents.
 data SLMapSlice k v = Slice {-# UNPACK #-} !(SLMap k v)
-                      !(Maybe k) -- Lower bound.  
+                      !(Maybe k) -- Lower bound.
                       !(Maybe k) -- Upper bound.
 
 -- | Physical identity
@@ -114,13 +114,13 @@ newSLMap :: Int -> IO (SLMap k v)
 newSLMap 0 = do
   lm <- LM.newLMap
   return $! SLMap (Bottom lm) lm
-newSLMap n = do 
+newSLMap n = do
   SLMap slm lmBottom <- newSLMap (n-1)
   lm <- LM.newLMap
   return $! SLMap (Index lm slm) lmBottom
 
 -- | Attempt to locate a key in the map.
-find :: Ord k => SLMap k v -> k -> IO (Maybe v)      
+find :: Ord k => SLMap k v -> k -> IO (Maybe v)
 find !(SLMap slm _) !k = find_ slm Nothing k
 
 -- Helper for @find@.
@@ -132,41 +132,41 @@ find_ (Bottom m) !shortcut !k = do
   case searchResult of
     LM.Found v       -> return $! Just $! v
     LM.NotFound _tok -> return Nothing
-    
+
 -- At an indexing level: attempt to use the index to shortcut into the level
--- below.  
-find_ (Index m slm) !shortcut !k = do 
+-- below.
+find_ (Index m slm) !shortcut !k = do
   searchResult <- LM.find (fromMaybe m shortcut) k
-  case searchResult of 
-    LM.Found (_, v) -> 
+  case searchResult of
+    LM.Found (_, v) ->
       return $! Just $! v   -- the key is in the index itself; we're outta here
     LM.NotFound tok -> case LM.value tok of
       Just (m', _) -> find_ slm (Just $! m') k     -- there's an index node
                                                 -- preceeding our key; use it to
                                                 -- shortcut into the level below.
-      
+
       Nothing      -> find_ slm Nothing k       -- no smaller key in the index,
                                                 -- so start at the beginning of
                                                 -- the level below.
-      
+
 data PutResult v = Added !v | Found !v
 
 -- {-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> Par e s v -> Par e s (PutResult v)  #-}
 {-# SPECIALIZE  putIfAbsent :: (Ord k) => SLMap k v -> k -> IO v -> IO (PutResult v) #-}
 {-# INLINABLE putIfAbsent_ #-}
-{-# SPECIALIZE 
-    putIfAbsent_ :: (Ord k) => SLMap_ k v t 
-                -> Maybe t     
-                -> k           
-                -> IO v         
-                -> IO Bool      
+{-# SPECIALIZE
+    putIfAbsent_ :: (Ord k) => SLMap_ k v t
+                -> Maybe t
+                -> k
+                -> IO v
+                -> IO Bool
                 -> (t -> v -> IO ())
                 -> IO (PutResult v)
  #-}
 
 -- | Adds a key/value pair if the key is not present, all within a given monad.
 -- Returns the value now associated with the key in the map.
-putIfAbsent :: (Ord k, MonadIO m, MonadToss m) => 
+putIfAbsent :: (Ord k, MonadIO m, MonadToss m) =>
                SLMap k v         -- ^ The map
                -> k              -- ^ The key to lookup/insert
                -> m v            -- ^ A computation of the value to insert
@@ -186,12 +186,12 @@ putIfAbsentToss :: (Ord k, MonadIO m) =>  SLMap k v -- ^ The map
                 -> m v           -- ^ A computation of the value to insert
                 -> m Bool        -- ^ An explicit, thread-local coin to toss
                 -> m (PutResult v)
-putIfAbsentToss !(SLMap slm _) !k !vc !coin = 
-  putIfAbsent_ slm Nothing k vc coin $ \_ _ -> return () 
-                                               
+putIfAbsentToss !(SLMap slm _) !k !vc !coin =
+  putIfAbsent_ slm Nothing k vc coin $ \_ _ -> return ()
+
 -- Helper for putIfAbsent
-putIfAbsent_ :: (Ord k, MonadIO m) => 
-                SLMap_ k v t    -- ^ The map    
+putIfAbsent_ :: (Ord k, MonadIO m) =>
+                SLMap_ k v t    -- ^ The map
                 -> Maybe t      -- ^ A shortcut into this skiplist level
                 -> k             -- ^ The key to lookup/insert
                 -> m v           -- ^ A computation of the value to insert
@@ -199,10 +199,10 @@ putIfAbsent_ :: (Ord k, MonadIO m) =>
                 -> (t -> v -> m ())  -- ^ A thunk for inserting into the higher
                                      -- levels of the skiplist
                 -> m (PutResult v)
-                
+
 -- At the bottom level, we use a retry loop around the find/tryInsert functions
 -- provided by LinkedMap
-putIfAbsent_ !(Bottom m) !shortcut !k !vc0 !_coin !install = retryLoop vc0 where 
+putIfAbsent_ !(Bottom m) !shortcut !k !vc0 !_coin !install = retryLoop vc0 where
   -- The retry loop; ensures that vc is only executed once
   retryLoop vc = do
     searchResult <- liftIO $ LM.find (fromMaybe m shortcut) k
@@ -216,22 +216,22 @@ putIfAbsent_ !(Bottom m) !shortcut !k !vc0 !_coin !install = retryLoop vc0 where
             install m' v                  -- all set on the bottom level, now try indices
             return $! Added v
           Nothing -> retryLoop $! return v -- next time around, remember the value to insert
-          
+
 -- At an index level; try to shortcut into the level below, while remembering
 -- where we were so that we can insert index nodes later on
-putIfAbsent_ !(Index m slm) !shortcut !k !vc !coin !install = do          
+putIfAbsent_ !(Index m slm) !shortcut !k !vc !coin !install = do
   searchResult <- liftIO (LM.find (fromMaybe m shortcut) k)
-  case searchResult of 
+  case searchResult of
     LM.Found (_, v) -> return $! Found v -- key is in the index; bail out
-    LM.NotFound tok -> 
+    LM.NotFound tok ->
       let install' mBelow v = do        -- to add an index node here,
             shouldAdd <- coin           -- first, see if we (probabilistically) should
-            when shouldAdd $ do 
+            when shouldAdd $ do
               maybeHere <- liftIO $ LM.tryInsert tok $! (mBelow, v)  -- then, try it!
               case maybeHere of
                 Just !mHere -> install mHere v  -- if we succeed, keep inserting
                                                 -- into the levels above us
-                              
+
                 Nothing -> return ()    -- otherwise, oh well; we tried.
       in case LM.value tok of
         Just (m', _) -> (putIfAbsent_ slm $! (Just $! m')) k vc coin install'
@@ -241,7 +241,7 @@ putIfAbsent_ !(Index m slm) !shortcut !k !vc !coin !install = do
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
 --
--- Strict in the accumulator.        
+-- Strict in the accumulator.
 foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
                 (a -> k -> v -> m a) -> a -> SLMap k v -> m a
 foldlWithKey liftio f !a (SLMap _ !lm) = LM.foldlWithKey liftio f a lm
@@ -284,7 +284,7 @@ instance Show (LM.LMap k v) where
   show _ = "<LinkedMap>"
 
 instance Show (LM.LMList k v) where
-  show _ = "<LinkedMapList>"  
+  show _ = "<LinkedMapList>"
 
 -- | Attempt to split a slice of an SLMap.  If there are not enough elements to form
 -- two slices, this retruns Nothing.
@@ -295,12 +295,12 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
   case res of
     Just (x,y) -> do sz1 <- fmap (P.map fst) $ sliceToList sl0
                      sz2 <- fmap (P.map fst) $ sliceToList x
-                     sz3 <- fmap (P.map fst) $ sliceToList y                      
+                     sz3 <- fmap (P.map fst) $ sliceToList y
                      putStrLn $ "Splitslice! size " ++(show sz1) ++" out szs "++(show (sz2,sz3))
                                 ++ " mstart/end "++show (mstart,mend)
     Nothing -> return ()
-  return res    
-  where    
+  return res
+  where
     loop :: SLMap_ k v t -> IO (Maybe (SLMapSlice k v, SLMapSlice k v))
     loop (Bottom (LM.LMap lm)) = do
       putStrLn "AT BOT"
@@ -312,7 +312,7 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
 
       -- DEBUG:
       putStrLn $ "halve RES -> "++show res
-      
+
       case res of
         Nothing -> return Nothing
         Just x -> dosplit (SLMap (Bottom (LM.LMap lm)) (LM.LMap lm))
@@ -322,7 +322,7 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
       indm <- readIORef m
       indm' <- case mstart of
                 Nothing -> return indm
-                Just strtK -> LM.dropUntil strtK indm      
+                Just strtK -> LM.dropUntil strtK indm
       -- Halve *this* level of the index, and use that as a fast way to split everything below.
       res <- LM.halve mend indm'
       case res of
@@ -332,16 +332,16 @@ splitSlice sl0@(Slice (SLMap index lmbot) mstart mend) = do
         -- Case 2: Do the split but use the full lmbot on the right
         -- (lazy pruning of the head elements):
         Just x -> dosplit (SLMap orig lmbot)
-                          (\ tlboxed -> SLMap (Index tlboxed slm) lmbot) x 
+                          (\ tlboxed -> SLMap (Index tlboxed slm) lmbot) x
 
     -- Create the left and right slices when halving is successful.
-    dosplit :: SLMap k v -> (LM.LMap k tmp -> SLMap k v) -> 
+    dosplit :: SLMap k v -> (LM.LMap k tmp -> SLMap k v) ->
                (Int, Int, LM.LMList k tmp) ->
                IO (Maybe (SLMapSlice k v, SLMapSlice k v))
     dosplit lmap mkRight (lenL, lenR, tlseg) =
       assert (lenL > 0) $ assert (lenR > 0) $ do
           putStrLn $ "Halved lengths "++show (lenL,lenR)
-          -- We don't really want to allocate just for slicing... but alas we need new 
+          -- We don't really want to allocate just for slicing... but alas we need new
           -- IORef boxes here.  We lazily prune the head of the lower levels, but we
           -- don't want to throw away the work we've done traversing to this point in "loop":
           tlboxed <- newIORef $! tlseg
@@ -370,7 +370,7 @@ sliceToList (Slice (SLMap _ lmbot) mstart mend) = do
                  Nothing   -> \ _ -> True
     endCheck = case mend of
                  Just end -> \ k -> k < end
-                 Nothing  -> \ _ -> True    
+                 Nothing  -> \ _ -> True
 
 
 
@@ -383,7 +383,7 @@ debugShow (Slice (SLMap index _lmbot) mstart mend) =
   where
     startCheck = case mstart of
                   Just start -> \ k -> k >= start
-                  Nothing  -> \ _ -> True    
+                  Nothing  -> \ _ -> True
     endCheck = case mend of
                  Just end -> \ k -> k < end
                  Nothing  -> \ _ -> True
@@ -403,12 +403,12 @@ debugShow (Slice (SLMap index _lmbot) mstart mend) =
       strs <- forM [ (i,tup) | i <- [(0::Int)..] | tup@(_k,_) <- ls ] $ -- , startCheck k
               \ (ix, (key, (_shortcut::t, val))) -> do
         -- Peek at the next layer down:
-{-        
+{-
         case (slm::SLMap_ k v t) of
           Index (nxt::LM.LMap k (t2,v)) _ -> do
---    Could not deduce (t3 ~ IORef (LM.LMList k (t3, v)))            
+--    Could not deduce (t3 ~ IORef (LM.LMList k (t3, v)))
             lmlst <- readIORef nxt
-            LM.findIndex lmlst lmlst            
+            LM.findIndex lmlst lmlst
 --        Bottom x  -> x
 -}
          if endCheck key && startCheck key
@@ -423,11 +423,10 @@ debugShow (Slice (SLMap index _lmbot) mstart mend) =
 defaultLevels :: Int
 defaultLevels = 8
 
-{-
 -- | SLMap's can provide an instance of the generic concurrent map interface.
 instance C.ConcurrentInsertMap SLMap where
   type Key SLMap k = (Ord k)
-  --  type Key SLMap = Ord 
+  --  type Key SLMap = Ord
 
   {-# INLINABLE new #-}
   new = newSLMap defaultLevels
@@ -435,7 +434,7 @@ instance C.ConcurrentInsertMap SLMap where
   {-# INLINABLE newSized #-}
   -- Here we base the number of index levels on the expected size:
   newSized n = newSLMap $! (ceiling (logBase 2 (fromIntegral n) :: Double))
-    
+
   {-# INLINABLE insert #-}
   insert !mp !k !v = do
     res <- putIfAbsent mp k (return v)
@@ -447,4 +446,3 @@ instance C.ConcurrentInsertMap SLMap where
   lookup = find
 
   -- TODO: estimate size
--}
