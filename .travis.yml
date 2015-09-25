@@ -9,7 +9,9 @@ before_install:
 - mkdir -p ~/.local/bin
 - export PATH=~/.local/bin:$PATH
 - RELEASE=0.1.5.0
-- travis_retry curl -L https://github.com/commercialhaskell/stack/releases/download/v${RELEASE}/stack-${RELEASE}-x86_64-linux.gz | gunzip > ~/.local/bin/stack
+- travis_retry curl -L https://github.com/commercialhaskell/stack/releases/download/v${RELEASE}/stack-${RELEASE}-x86_64-linux.tar.gz
+- tar xvf stack-${RELEASE}-x86_64-linux.tar.gz
+- cp -a stack-${RELEASE}-x86_64-linux/stack ~/.local/bin/stack
 - chmod a+x ~/.local/bin/stack
 - cat /proc/cpuinfo | grep name
 
