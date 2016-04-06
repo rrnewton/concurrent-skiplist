@@ -1,6 +1,32 @@
 language: haskell
-ghc:
-  - 7.6
-  - 7.8
+
+sudo: false
+cache:
+  directories:
+  - $HOME/.stack/
+
+git:
+  submodules: false
+
+before_install:
+ - sed -i 's/git@github.com:/https:\/\/github.com\//' .gitmodules
+ - git submodule update --init --recursive
+ - mkdir -p ~/.local/bin
+ - export PATH=~/.local/bin:$PATH
+ - RELEASE=0.1.5.0
+ - travis_retry wget https://github.com/commercialhaskell/stack/releases/download/v${RELEASE}/stack-${RELEASE}-x86_64-linux.tar.gz
+ - tar xvf stack-${RELEASE}-x86_64-linux.tar.gz
+ - cp -a stack-${RELEASE}-x86_64-linux/stack ~/.local/bin/stack
+ - chmod a+x ~/.local/bin/stack
+ - cat /proc/cpuinfo | grep name
+
+install:
+  - stack setup --no-terminal
+  - stack test --only-snapshot --no-terminal
+
+script:
+  - stack test --no-terminal
+
 notifications:
   email: false
+  slack: parfunc:WY1jCNQnMVuWNN9UTdtor6pt

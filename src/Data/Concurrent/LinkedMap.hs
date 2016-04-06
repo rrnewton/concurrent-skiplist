@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
--- | A concurrent finite map represented as a single linked list.  
+-- | A concurrent finite map represented as a single linked list.
 --
 -- In contrast to standard maps, this one only allows lookups and insertions,
 -- not modifications or removals.  While modifications would be fairly easy to
@@ -21,14 +21,14 @@ module Data.Concurrent.LinkedMap (
   LMap(..), LMList(..),
   newLMap, Token(), value, find, FindResult(..), tryInsert,
   foldlWithKey, map, reverse, head, toList, fromList, findIndex,
-  
+
   -- * Utilities for splitting/slicing
   halve, halve', dropUntil
   )
 where
-  
+
 import Data.IORef
-import Data.Atomics  
+import Data.Atomics
 --import Control.Reagent -- AT: not yet using this, but would be nice to refactor
                          -- to use it.
 import Control.Monad.IO.Class
@@ -40,9 +40,9 @@ import qualified Data.Concurrent.Map.Class as C
 --------------------------------------------------------------------------------
 
 -- | A concurrent finite map, represented as a linked list
-data LMList k v = 
+data LMList k v =
     Node k v {-# UNPACK #-} !(IORef (LMList k v))
-  | Empty 
+  | Empty
 
 newtype LMap k v = LMap (IORef (LMList k v))
   deriving (Eq)
@@ -51,8 +51,8 @@ newtype LMap k v = LMap (IORef (LMList k v))
 newLMap :: IO (LMap k v)
 newLMap = do !x <- newIORef Empty
              return (LMap x)
-  
--- | A position in the map into which a key/value pair can be inserted          
+
+-- | A position in the map into which a key/value pair can be inserted
 data Token k v = Token {
   keyToInsert :: k,                   -- ^ what key were we looking up?
   value       :: Maybe v,             -- ^ the value at this position in the map
@@ -69,23 +69,23 @@ data FindResult k v =
 -- | Attempt to locate a key in the map
 {-# INLINE find #-}
 find :: Ord k => LMap k v -> k -> IO (FindResult k v)
-find (LMap m) k = findInner m Nothing 
-  where 
+find (LMap m) k = findInner m Nothing
+  where
     findInner m v = do
       nextTicket <- readForCAS m
       let stopHere = NotFound $ Token {keyToInsert = k, value = v, nextRef = m, nextTicket}
       case peekTicket nextTicket of
         Empty -> return stopHere
-        Node k' v' next -> 
+        Node k' v' next ->
           case compare k k' of
             LT -> return stopHere
             EQ -> return $ Found v'
             GT -> findInner next (Just v')
-      
+
 -- | Attempt to insert a key/value pair at the given location (where the key is
 -- given by the token).  NB: tryInsert will *always* fail after the first attempt.
--- If successful, returns a (mutable!) view of the map beginning at the given key.            
-{-# INLINE tryInsert #-}            
+-- If successful, returns a (mutable!) view of the map beginning at the given key.
+{-# INLINE tryInsert #-}
 tryInsert :: Token k v -> v -> IO (Maybe (LMap k v))
 tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
   newRef <- newIORef $ peekTicket nextTicket
@@ -96,7 +96,7 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
 -- monad, in increasing key order.  Inserts that arrive concurrently may or may
 -- not be included in the fold.
 --
--- Strict in the accumulator.  
+-- Strict in the accumulator.
 foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
                 (a -> k -> v -> m a) -> a -> LMap k v -> m a
 foldlWithKey liftIO f !a (LMap !m) = do
@@ -112,14 +112,14 @@ foldlWithKey liftIO f !a (LMap !m) = do
 -- not be included.  This does not affect keys, so the physical structure remains the
 -- same.
 map :: MonadIO m => (a -> b) -> LMap k a -> m (LMap k b)
-map fn mp = do 
+map fn mp = do
  tmp <- foldlWithKey liftIO
                      (\ acc k v -> do
                       r <- liftIO (newIORef acc)
                       return$! Node k (fn v) r)
                      Empty mp
  tmp' <- liftIO (newIORef tmp)
- -- Here we suffer a reverse to avoid blowing the stack. 
+ -- Here we suffer a reverse to avoid blowing the stack.
  reverse (LMap tmp')
 
 -- | Create a new linked map that is the reverse order from the input.
@@ -151,8 +151,7 @@ toList (LMap lm) = do
     Empty       -> return []
     Node k v tl -> do
       ls <- toList (LMap tl)
-      return $! (k,v) : ls 
-
+      return $! (k,v) : ls
 -- | Convert from a list.
 fromList :: [(k,v)] -> IO (LMap k v)
 fromList ls = do
@@ -167,7 +166,7 @@ fromList ls = do
 
 
 halve' :: Ord k => Maybe k -> LMap k v -> IO (Maybe (LMap k v, LMap k v))
-halve' mend (LMap lm) = do 
+halve' mend (LMap lm) = do
   lml <- readIORef lm
   res <- halve mend lml
   case res of
@@ -177,10 +176,10 @@ halve' mend (LMap lm) = do
       l' <- fromList (take len1 ls)
       r' <- newIORef tailhd
       return $! Just $! (l', LMap r')
-          
+
 
 -- | Attempt to split into two halves.
---    
+--
 --   This optionally takes an upper bound key, which is treated as an alternate
 --   end-of-list signifier.
 --
@@ -203,7 +202,7 @@ halve mend ls = loop 0 ls ls
 
     loop len tort hare | isEnd hare =
       emptCheck (len, len, tort)
-    loop len tort@(Node _ _ next1) (Node k v next2) = do 
+    loop len tort@(Node _ _ next1) (Node k v next2) = do
       next2' <- readIORef next2
       case next2' of
         x | isEnd x -> emptCheck (len, len+1, tort)
@@ -218,13 +217,22 @@ dropUntil _ Empty = return Empty
 dropUntil stop nd@(Node k v tl)
   | stop <= k = return nd
   | otherwise = do tl' <- readIORef tl
-                   dropUntil stop tl' 
+                   dropUntil stop tl'
 
 -- | Given a pointer into the middle of the list, find how deep it is.
 -- findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
-findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)                   
+findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
 findIndex ls1 ls2 =
   error "FINISHME - LinkedMap.findIndex"
+
+len :: LMap k v -> IO Int
+len (LMap lm) = do
+  x <- readIORef lm
+  case x of
+    Empty       -> return 0
+    Node k v tl -> do
+      n <- len (LMap tl)
+      return $! n + 1
 
 -- | LinkedMap can provide an instance of the generic concurrent map interface,
 --   but be warned that it has O(N) complexity on find and insert.
@@ -232,11 +240,11 @@ instance C.ConcurrentInsertMap LMap where
   type Key LMap k = (Ord k)
 
   {-# INLINABLE new #-}
-  new = newLMap 
-    
+  new = newLMap
+
   {-# INLINABLE insert #-}
   insert mp k v = do
-    NotFound tok <- find mp k    
+    NotFound tok <- find mp k
     res_ <- tryInsert tok v
     return ()
 
@@ -245,5 +253,5 @@ instance C.ConcurrentInsertMap LMap where
                    case res of
                      Found v -> return $! Just $! v
                      NotFound _ -> return Nothing
-                     
 
+  estimateSize mp = len mp

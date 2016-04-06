@@ -36,7 +36,7 @@ library
                   ghc-prim >= 0.3,
                   transformers >=0.3 && <0.5,
                   atomic-primops >=0.7 && < 0.9,
-                  async >= 2.0 && < 2.1,
+                  async >= 2.0,
                   vector >= 0.10
 
   -- For building test-suites.  This could go in a separate package:
