@@ -1,7 +1,7 @@
 
 module Data.Concurrent.Internal.MonadToss where
 
-import Control.Monad
+-- import Control.Monad
 import System.Random (randomIO)
 
 -- | A typeclass for monads supporting a coin toss operation.  NB: the coin is

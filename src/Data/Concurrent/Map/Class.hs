@@ -8,7 +8,7 @@ module Data.Concurrent.Map.Class
        (ConcurrentInsertMap(..), ConcurrentMap(..))
        where
 
-import GHC.Prim (Constraint)
+import GHC.Base (Constraint)
 --------------------------------------------------------------------------------
 
 

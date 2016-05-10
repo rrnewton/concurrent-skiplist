@@ -38,4 +38,4 @@ postCommit :: Reagent a -> (a -> IO b) -> Reagent b
 postCommit r f succ fail = r (\x -> f x >>= succ) fail
 
 choice :: Reagent a -> Reagent a -> Reagent a
-choice = error "TODO"
+choice _ _ = error "TODO"
