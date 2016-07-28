@@ -2,5 +2,6 @@
 cabal.sandbox.config
 dist/
 .stack-work/
+pcg-random/
 # Ignore Criterion reports
 *.crit
