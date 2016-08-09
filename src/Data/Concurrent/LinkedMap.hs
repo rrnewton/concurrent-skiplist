@@ -32,8 +32,7 @@ import Data.Atomics
 --import Control.Reagent -- AT: not yet using this, but would be nice to refactor
                          -- to use it.
 import Control.Monad.IO.Class
-import Control.Exception (assert)
-import Prelude hiding (reverse, map, head)
+import Prelude hiding (reverse, map, head, length)
 
 import qualified Data.Concurrent.Map.Class as C
 
@@ -69,7 +68,7 @@ data FindResult k v =
 -- | Attempt to locate a key in the map
 {-# INLINE find #-}
 find :: Ord k => LMap k v -> k -> IO (FindResult k v)
-find (LMap m) k = findInner m Nothing
+find (LMap m') k = findInner m' Nothing
   where
     findInner m v = do
       nextTicket <- readForCAS m
@@ -99,13 +98,13 @@ tryInsert Token { keyToInsert, nextRef, nextTicket } v = do
 -- Strict in the accumulator.
 foldlWithKey :: Monad m => (forall x . IO x -> m x) ->
                 (a -> k -> v -> m a) -> a -> LMap k v -> m a
-foldlWithKey liftIO f !a (LMap !m) = do
-  n <- liftIO$ readIORef m
+foldlWithKey liftIO' f !a (LMap !m) = do
+  n <- liftIO' $ readIORef m
   case n of
     Empty -> return a
     Node k v next -> do
       a' <- f a k v
-      foldlWithKey liftIO f a' (LMap next)
+      foldlWithKey liftIO' f a' (LMap next)
 
 
 -- | Map over a snapshot of the list.  Inserts that arrive concurrently may or may
@@ -128,8 +127,8 @@ reverse (LMap mp) = liftIO (do x <- loop Empty mp
                                r <- newIORef x
                                return (LMap r))
   where
-    loop !acc mp = do
-      n <- liftIO$ readIORef mp
+    loop !acc mp' = do
+      n <- liftIO$ readIORef mp'
       case n of
         Empty -> return acc
         Node k v next -> do
@@ -200,21 +199,24 @@ halve mend ls = loop 0 ls ls
     emptCheck (0,_l2,_t) = return Nothing
     emptCheck !x       = return $! Just x
 
-    loop len tort hare | isEnd hare =
-      emptCheck (len, len, tort)
-    loop len tort@(Node _ _ next1) (Node k v next2) = do
+    loop length tort hare | isEnd hare =
+      emptCheck (length, length, tort)
+    loop length tort@(Node _ _ next1) (Node _ _ next2) = do
       next2' <- readIORef next2
       case next2' of
-        x | isEnd x -> emptCheck (len, len+1, tort)
+        x | isEnd x -> emptCheck (length, length+1, tort)
         Node _ _ next3 -> do next1' <- readIORef next1
                              next3' <- readIORef next3
-                             loop (len+1) next1' next3'
+                             loop (length+1) next1' next3'
+        Empty -> emptCheck (length, length+1, tort)
+    loop length tort Empty = emptCheck (length, length, tort)
+    loop _ Empty _ = error "impossible"
 
 -- | Drop from the front of the list until the first key is equal or greater than the
 -- given key.
 dropUntil :: Ord k => k -> LMList k v -> IO (LMList k v)
 dropUntil _ Empty = return Empty
-dropUntil stop nd@(Node k v tl)
+dropUntil stop nd@(Node k _ tl)
   | stop <= k = return nd
   | otherwise = do tl' <- readIORef tl
                    dropUntil stop tl'
@@ -222,7 +224,7 @@ dropUntil stop nd@(Node k v tl)
 -- | Given a pointer into the middle of the list, find how deep it is.
 -- findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
 findIndex :: Eq k => LMList k v -> LMList k v -> IO (Maybe Int)
-findIndex ls1 ls2 =
+findIndex _ _ =
   error "FINISHME - LinkedMap.findIndex"
 
 len :: LMap k v -> IO Int
@@ -230,7 +232,7 @@ len (LMap lm) = do
   x <- readIORef lm
   case x of
     Empty       -> return 0
-    Node k v tl -> do
+    Node _ _ tl -> do
       n <- len (LMap tl)
       return $! n + 1
 
@@ -245,7 +247,7 @@ instance C.ConcurrentInsertMap LMap where
   {-# INLINABLE insert #-}
   insert mp k v = do
     NotFound tok <- find mp k
-    res_ <- tryInsert tok v
+    _ <- tryInsert tok v
     return ()
 
   {-# INLINABLE lookup #-}

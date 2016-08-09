@@ -8,6 +8,7 @@ module Data.Concurrent.Internal.Reagent where
   
 import Data.IORef  
 import Data.Atomics
+import Prelude hiding (succ, fail)
 
 type Reagent a = forall b. (a -> IO b) -> IO b -> IO b
 

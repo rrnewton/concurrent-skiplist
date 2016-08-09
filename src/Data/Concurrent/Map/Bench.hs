@@ -7,17 +7,15 @@ module Data.Concurrent.Map.Bench
        (PreBench(..), mkBenchSuite, Proxy(..))
        where
 
-import Control.Exception
 import Control.Monad
 -- import Control.DeepSeq
-import Control.Concurrent (getNumCapabilities, forkOn, forkIO)
+import Control.Concurrent (getNumCapabilities, forkOn)
 import Control.Concurrent.MVar
-import Control.Concurrent.Async (wait, withAsyncOn)
+--import Control.Concurrent.Async (wait, withAsyncOn)
 import qualified Data.Concurrent.Map.Class as C
-import Data.Concurrent.LinkedMap as LM
-import Data.Concurrent.SkipListMap as SLM
+--import Data.Concurrent.LinkedMap as LM
+--import Data.Concurrent.SkipListMap as SLM
 import Data.Int
-import System.Mem (performGC)
 --------------------------------------------------------------------------------
 
 data Proxy a = Proxy
@@ -103,8 +101,8 @@ mkBenchSuite name Proxy = do
 
 -- | Prebuild N empty copies of a structure so we can communicate
 --   their locations once, and blast them all in parallel.
-makeNfillN = do
-  undefined
+-- makeNfillN = do
+--   undefined
 
 -- | Run N copies of an IO action in parallel.  Pass in a number from
 -- 0..N-1, letting the worker know which it is.
@@ -116,9 +114,9 @@ forkJoin num act = loop2 num []
               putStrLn $ "End action "++show n++" of "++show num
 
   -- VERSION 1: This strategy makes things exception safe:
-  loop 0 ls = mapM_ wait ls
-  loop n ls = withAsyncOn (n-1) (act' (n-1)) $ \ asnc ->
-               loop (n-1) (asnc:ls)
+  -- loop 0 ls = mapM_ wait ls
+  -- loop n ls = withAsyncOn (n-1) (act' (n-1)) $ \ asnc ->
+  --              loop (n-1) (asnc:ls)
 
   -- VERSION 2: The less safe version:
   loop2 0 ls = mapM_ takeMVar ls
@@ -131,10 +129,10 @@ forkJoin num act = loop2 num []
 
   -- VERSION 3: No pinning:  Just switching to this version slows us down a bit
   -- but not much.  However, it will allow overpartitioning.
-  loop3 0 ls = mapM_ takeMVar ls
-  loop3 n ls = do mv <- newEmptyMVar
-                  _  <- forkIO (do act' (n-1); putMVar mv ())
-                  loop3 (n-1) (mv:ls)
+  -- loop3 0 ls = mapM_ takeMVar ls
+  -- loop3 n ls = do mv <- newEmptyMVar
+  --                 _  <- forkIO (do act' (n-1); putMVar mv ())
+  --                 loop3 (n-1) (mv:ls)
 
 
 {-

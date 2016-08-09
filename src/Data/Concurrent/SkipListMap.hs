@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-} -- for debugging
 
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | An implementation of concurrent finite maps based on skip lists.  Only
 -- supports lookup and insertions, not modifications or removals.
