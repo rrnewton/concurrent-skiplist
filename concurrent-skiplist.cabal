@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                concurrent-skiplist
-version:             0.1.0.0
+version:             0.1.0.1
 -- synopsis:
 -- description:
 license:             Apache-2.0
@@ -31,10 +31,10 @@ library
 
   other-extensions:  NamedFieldPuns, BangPatterns, RankNTypes, ExistentialQuantification, GADTs,
                      ScopedTypeVariables, ParallelListComp, TypeSynonymInstances, FlexibleInstances
-  build-depends:  base   >=4.6 && <4.9,
+  build-depends:  base   >=4.6,
                   random >=1.0 && <1.2,
                   ghc-prim >= 0.3,
-                  transformers >=0.3 && <0.5,
+                  transformers >=0.3,
                   atomic-primops >=0.7 && < 0.9,
                   async >= 2.0,
                   vector >= 0.10
@@ -54,7 +54,7 @@ test-suite test-concurrent-skiplist
     other-modules : TestHelpers
 
     build-depends: concurrent-skiplist
-    build-depends: base    >= 4.6 && < 4.9,
+    build-depends: base    >= 4.6,
                    random >= 1.0,
                    async
     build-depends: tasty, tasty-hunit, tasty-th,
@@ -73,7 +73,7 @@ test-suite test-concurrent-skiplist2
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4
 
     build-depends: concurrent-skiplist
-    build-depends: base    >= 4.6 && < 4.9,
+    build-depends: base    >= 4.6,
                    random >= 1.0,
                    async
     build-depends: tasty, tasty-hunit, tasty-th,
@@ -91,7 +91,7 @@ benchmark bench-concurrent-skiplist
     hs-source-dirs: tests/
     ghc-options:  -O2 -threaded -rtsopts -with-rtsopts=-N4 -eventlog
     build-depends: concurrent-skiplist
-    build-depends: base >= 4.6 && < 4.9,
+    build-depends: base >= 4.6,
                    criterion >= 1.0,
                    containers >= 0.5,
                    atomic-primops >=0.7 && < 0.9
